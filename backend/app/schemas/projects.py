@@ -72,3 +72,14 @@ class ScoreAdjustmentRead(ORMModel):
     reason: str
     author_user_id: str
     created_at: datetime
+
+
+class TimelinessUpdate(ORMModel):
+    """Patch-style update for timeliness multipliers; None means 'leave as-is'."""
+
+    on_time_band_days: int | None = Field(default=None, ge=0, le=365)
+    mild_band_days: int | None = Field(default=None, ge=0, le=365)
+    medium_band_days: int | None = Field(default=None, ge=0, le=365)
+    late_mild: Decimal | None = Field(default=None, ge=Decimal("0"), le=Decimal("1"))
+    late_medium: Decimal | None = Field(default=None, ge=Decimal("0"), le=Decimal("1"))
+    late_severe: Decimal | None = Field(default=None, ge=Decimal("0"), le=Decimal("1"))

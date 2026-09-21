@@ -110,7 +110,15 @@ def test_update_timeliness_rejects_invalid(client, team_with_user) -> None:
     pid = r.json()["id"]
     # late_mild must be ≥ late_medium; here we send 0.5 < 0.7 to violate the rule
     r = client.put(
-        f"/api/v1/projects/{pid}/timeliness?on_time_band_days=0&mild_band_days=2&medium_band_days=7&late_mild=0.5&late_medium=0.7&late_severe=0.3",
+        f"/api/v1/projects/{pid}/timeliness",
+        json={
+            "on_time_band_days": 0,
+            "mild_band_days": 2,
+            "medium_band_days": 7,
+            "late_mild": "0.5",
+            "late_medium": "0.7",
+            "late_severe": "0.3",
+        },
     )
     assert r.status_code == 422
 

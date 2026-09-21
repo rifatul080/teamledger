@@ -17,6 +17,7 @@ from ...schemas.projects import (
     ProjectUpdate,
     ScoreAdjustmentCreate,
     ScoreAdjustmentRead,
+    TimelinessUpdate,
 )
 from ...schemas.scoring import ScoreRead
 from ...services import project_service, task_service
@@ -26,7 +27,8 @@ router = APIRouter(tags=["projects"])
 
 
 @router.get("/credit-categories", response_model=list[dict])
-def list_categories_route(_: User = Depends(current_user)) -> list[dict]:
+def list_categories_route() -> list[dict]:
+    """Public: pickers render before login."""
     return [{"code": c, "label": label} for c, label in CREDIT_BY_CODE.items()]
 
 
@@ -244,12 +246,7 @@ def get_timeliness(
 )
 def update_timeliness(
     project_id: str,
-    on_time_band_days: int | None = None,
-    mild_band_days: int | None = None,
-    medium_band_days: int | None = None,
-    late_mild: Decimal | None = None,
-    late_medium: Decimal | None = None,
-    late_severe: Decimal | None = None,
+    payload: TimelinessUpdate = Body(default_factory=TimelinessUpdate),
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ) -> dict:
@@ -260,12 +257,12 @@ def update_timeliness(
     project_service.update_timeliness(
         db,
         project_id,
-        on_time_band_days=on_time_band_days,
-        mild_band_days=mild_band_days,
-        medium_band_days=medium_band_days,
-        late_mild=late_mild,
-        late_medium=late_medium,
-        late_severe=late_severe,
+        on_time_band_days=payload.on_time_band_days,
+        mild_band_days=payload.mild_band_days,
+        medium_band_days=payload.medium_band_days,
+        late_mild=payload.late_mild,
+        late_medium=payload.late_medium,
+        late_severe=payload.late_severe,
     )
     audit(
         db,
