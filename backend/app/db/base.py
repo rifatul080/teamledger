@@ -1,7 +1,7 @@
 """SQLAlchemy 2 declarative base."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, ClassVar
 
 from sqlalchemy import DateTime, event
@@ -18,7 +18,7 @@ class TimestampMixin:
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=lambda: datetime.now(tz=timezone.utc),
+        default=lambda: datetime.now(tz=UTC),
     )
 
 
@@ -27,7 +27,7 @@ def _ensure_created_at(session: Session, flush_context: Any, instances: Any) -> 
     """Fill in created_at on insert if the caller forgot."""
     for obj in session.new:
         if isinstance(obj, TimestampMixin) and getattr(obj, "created_at", None) is None:
-            setattr(obj, "created_at", datetime.now(tz=timezone.utc))
+            obj.created_at = datetime.now(tz=UTC)
 
 
 def jsonable(value: Any) -> Any:

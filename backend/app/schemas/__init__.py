@@ -1,0 +1,15 @@
+"""Pydantic v2 schemas shared across the API."""
+from .auth import *  # noqa: F403
+from .chat import *  # noqa: F403
+from .common import *  # noqa: F403
+from .files import *  # noqa: F403
+from .goals import *  # noqa: F403
+from .invitations import *  # noqa: F403
+from .milestones import *  # noqa: F403
+from .notifications import *  # noqa: F403
+from .projects import *  # noqa: F403
+from .schedules import *  # noqa: F403
+from .scoring import *  # noqa: F403
+from .tasks import *  # noqa: F403
+from .teams import *  # noqa: F403
+from .users import *  # noqa: F403

@@ -118,6 +118,7 @@ def audit(
     from ..core.ids import new_id  # local import to avoid cycles
     from ..models.audit import AuditEvent
 
+    now = when or datetime.now(tz=UTC)
     event = AuditEvent(
         id=new_id(),
         actor_user_id=actor_user_id,
@@ -127,7 +128,8 @@ def audit(
         subject_kind=subject_kind,
         subject_id=subject_id,
         payload=json.dumps(payload) if payload else None,
-        at=when or datetime.now(tz=UTC),
+        at=now,
+        created_at=now,
     )
     db.add(event)
 

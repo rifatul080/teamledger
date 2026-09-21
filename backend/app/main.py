@@ -4,8 +4,9 @@ from __future__ import annotations
 import logging
 import time
 import uuid
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -59,8 +60,8 @@ def create_app() -> FastAPI:
 
     @app.middleware("http")
     async def add_security_headers(
-        request: Request, call_next: "Any"
-    ) -> "Any":
+        request: Request, call_next: Any
+    ) -> Any:
         response = await call_next(request)
         # Tag every response with a request id so the client can correlate.
         rid = request.headers.get("x-request-id") or uuid.uuid4().hex
@@ -72,7 +73,7 @@ def create_app() -> FastAPI:
         return response
 
     @app.middleware("http")
-    async def access_log(request: Request, call_next: "Any") -> "Any":
+    async def access_log(request: Request, call_next: Any) -> Any:
         t0 = time.monotonic()
         response = await call_next(request)
         elapsed = (time.monotonic() - t0) * 1000

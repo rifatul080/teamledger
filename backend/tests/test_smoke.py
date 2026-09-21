@@ -1,9 +1,6 @@
 """Smoke tests: the import surface works and the app boots."""
 from __future__ import annotations
 
-import os
-import sqlite3
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -31,7 +28,7 @@ def test_app_route_table() -> None:
 def test_alembic_seed_categories(tmp_path: Path) -> None:
     """Sanity check that the migration's bulk insert seeds all 14 CRediT categories."""
     db_path = tmp_path / "t.db"
-    env_db = f"sqlite:///{db_path}"
+    _ = f"sqlite:///{db_path}"
     # Re-run alembic against a fresh DB via subprocess would be heavy; just
     # verify the model's name set matches the CRediT taxonomy in services.credit.
     from app.services.credit import CREDIT_BY_CODE
