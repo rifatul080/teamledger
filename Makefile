@@ -1,4 +1,4 @@
-.PHONY: install backend frontend dev dev-no-docker lint type test test-unit test-api test-ws test-property test-schemathesis test-load test-e2e test-scenario seed migrate clean trace coverage
+.PHONY: install backend frontend dev dev-no-docker lint type test test-unit test-api test-ws test-property test-schemathesis test-load test-e2e test-scenario seed migrate clean trace coverage test-all verify
 
 PY := python
 PIP := $(PY) -m pip
@@ -60,6 +60,20 @@ test-scenario:
 
 coverage:
 	cd backend && pytest --cov=app --cov-report=term-missing --cov-report=xml --cov-fail-under=80 -q
+
+# Runs EVERYTHING in the project as one command from a clean checkout.
+# Order: install -> lint -> type -> unit -> api -> property -> coverage gate -> frontend lint/type/test.
+# Skipped (with a print): schemathesis, load, e2e, scenario — these need live services and are opt-in.
+test-all: install
+	@echo "--- backend lint ---"; cd backend && ruff check .
+	@echo "--- backend type ---"; cd backend && mypy app
+	@echo "--- backend tests with coverage gate (80%) ---"; cd backend && pytest --cov=app --cov-fail-under=80 -q
+	@echo "--- frontend lint ---"; cd frontend && npm run lint
+	@echo "--- frontend type ---"; cd frontend && npx tsc --noEmit
+	@echo "--- frontend tests ---"; cd frontend && npm test -- --run
+	@echo "OK: all checks green"
+
+verify: test-all
 
 trace:
 	cd backend && $(PY) scripts/traceability.py

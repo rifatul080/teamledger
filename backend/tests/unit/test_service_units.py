@@ -7,7 +7,6 @@ import zipfile
 from datetime import UTC, datetime
 
 import pytest
-
 from app.core.errors import AppError
 from app.models.team import Team
 from app.services import (
