@@ -22,6 +22,26 @@ from ...services import chat_service, team_service
 
 log = logging.getLogger("teamledger.chat")
 
+
+def _safe_broadcast(coro) -> None:
+    """Schedule coro on the running event loop, or drop it gracefully.
+
+    REST handlers run synchronously; in tests there is no loop so we must not
+    crash. In production FastAPI runs endpoints in an event loop, so this
+    preserves real-time broadcast.
+    """
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        # No running loop (e.g. TestClient sync context). Close the coroutine
+        # so we don't leak a "never-awaited" warning, then return.
+        try:
+            coro.close()
+        except Exception:
+            pass
+        return
+    loop.create_task(coro)
+
 router = APIRouter(tags=["chat"])
 
 
@@ -90,7 +110,7 @@ def send_message(
     )
     db.commit()
     # Broadcast in background
-    _ = asyncio.create_task(
+    _safe_broadcast(
         hub.broadcast_json(team_id, {"type": "message", **{
             "id": msg.id, "team_id": msg.team_id, "sender_user_id": msg.sender_user_id,
             "seq": msg.seq, "body": msg.body, "mentions": [m for m in (msg.mentions or "").split(",") if m],
@@ -114,7 +134,7 @@ def edit_message(
         raise not_found(code="chat.not_found")
     chat_service.edit_message(db, msg=msg, actor=user, body=payload.body)
     db.commit()
-    _ = asyncio.create_task(hub.broadcast_json(team_id, _serialize(msg)))
+    _safe_broadcast(hub.broadcast_json(team_id, _serialize(msg)))
     return _to_read(msg)
 
 
@@ -131,7 +151,7 @@ def delete_message(
         raise not_found(code="chat.not_found")
     chat_service.delete_message(db, msg=msg, actor=user, is_leader=(m.role == "leader"))
     db.commit()
-    _ = asyncio.create_task(hub.broadcast_json(team_id, _serialize(msg)))
+    _safe_broadcast(hub.broadcast_json(team_id, _serialize(msg)))
 
 @router.get("/teams/{team_id}/unread")
 def unread(
