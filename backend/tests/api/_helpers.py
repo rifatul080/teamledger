@@ -5,11 +5,11 @@ from typing import Any
 
 
 class AuthedClient:
-    """Wraps a TestClient and re-logins before each request.
+    """Wraps a TestClient and lazily logs in once, reusing cookies.
 
     TestClient does not auto-forward httponly cookies between requests in some
-    configurations. This helper logs in fresh and passes the cookies back to
-    every call.
+    configurations. This helper logs in once per instance and re-uses the
+    cookies on subsequent calls. A request returning 401 forces a fresh login.
     """
 
     def __init__(self, client: Any, email: str, password: str = "Password1Demo") -> None:
@@ -27,25 +27,30 @@ class AuthedClient:
             "tl_csrf": r.cookies.get("tl_csrf"),
         }
 
+    def _do(self, method: str, path: str, **kw: Any):  # type: ignore[no-untyped-def]
+        if not self._cookies:
+            self._login()
+        r = getattr(self._c, method)(path, cookies=self._cookies, **kw)
+        if r.status_code == 401:
+            # Cookies stale (e.g. across test boundary) — log in once more.
+            self._login()
+            r = getattr(self._c, method)(path, cookies=self._cookies, **kw)
+        return r
+
     def get(self, path: str, **kw: Any):  # type: ignore[no-untyped-def]
-        self._login()
-        return self._c.get(path, cookies=self._cookies, **kw)
+        return self._do("get", path, **kw)
 
     def post(self, path: str, **kw: Any):  # type: ignore[no-untyped-def]
-        self._login()
-        return self._c.post(path, cookies=self._cookies, **kw)
+        return self._do("post", path, **kw)
 
     def patch(self, path: str, **kw: Any):  # type: ignore[no-untyped-def]
-        self._login()
-        return self._c.patch(path, cookies=self._cookies, **kw)
+        return self._do("patch", path, **kw)
 
     def delete(self, path: str, **kw: Any):  # type: ignore[no-untyped-def]
-        self._login()
-        return self._c.delete(path, cookies=self._cookies, **kw)
+        return self._do("delete", path, **kw)
 
     def put(self, path: str, **kw: Any):  # type: ignore[no-untyped-def]
-        self._login()
-        return self._c.put(path, cookies=self._cookies, **kw)
+        return self._do("put", path, **kw)
 
 
 def signup(client: Any, email: str, display: str = "U") -> None:
