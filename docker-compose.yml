@@ -1,0 +1,64 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: teamledger
+      POSTGRES_PASSWORD: teamledger
+      POSTGRES_DB: teamledger
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U teamledger"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://teamledger:teamledger@db:5432/teamledger
+      REDIS_URL: redis://redis:6379/0
+      APP_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports:
+      - "8000:8000"
+    volumes:
+      - files_data:/app/storage/files
+    command: ["bash", "-lc", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers"]
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    environment:
+      VITE_API_BASE_URL: http://localhost:8000/api/v1
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+
+  maildev:
+    image: maildev/maildev:latest
+    ports:
+      - "1080:1080"
+      - "1025:1025"
+
+volumes:
+  pgdata: {}
+  files_data: {}
