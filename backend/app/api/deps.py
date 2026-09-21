@@ -106,9 +106,9 @@ def require_role(team_id: str, db: Session, user_id: str, role: str) -> Membersh
 def audit(
     db: Session,
     *,
-    actor_user_id: str | None,
-    team_id: str | None,
-    project_id: str | None,
+    actor_user_id: str | None = None,
+    team_id: str | None = None,
+    project_id: str | None = None,
     action: str,
     subject_kind: str,
     subject_id: str,

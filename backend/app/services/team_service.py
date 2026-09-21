@@ -131,7 +131,11 @@ def accept_invitation(db: Session, *, token: str, user: User) -> Membership:
     if inv is None or inv.revoked_at is not None:
         raise not_found(code="invitation.not_found")
     now = datetime.now(tz=UTC)
-    if inv.expires_at < now:
+    now = datetime.now(tz=UTC)
+    expires = inv.expires_at
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=UTC)
+    if expires < now:
         raise validation("Invitation expired.", code="invitation.expired")
     if inv.accepted_at is not None:
         # Already accepted — if same user, return membership; else forbid.

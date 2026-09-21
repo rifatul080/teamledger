@@ -24,5 +24,9 @@ class RateLimiter:
             bucket.append(now)
             return True
 
+    def reset(self) -> None:
+        with self._lock:
+            self._buckets.clear()
+
 
 limiter = RateLimiter()

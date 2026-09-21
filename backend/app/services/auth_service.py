@@ -1,4 +1,4 @@
-"""Auth service: signup, login, refresh, password reset."""
+﻿"""Auth service: signup, login, refresh, password reset."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -52,7 +52,7 @@ def create_user(
         timezone=timezone or "UTC",
         password_hash=hash_password(password),
         is_active=True,
-        created_at=datetime.now(tz=timezone.utc),
+        created_at=datetime.now(tz=UTC),
     )
     db.add(user)
     db.flush()
@@ -93,7 +93,7 @@ def issue_token_bundle(db: Session, user: User, *, ip: str | None = None, user_a
             expires_at=expires_at,
             user_agent=(user_agent or "")[:255] or None,
             ip=(ip or "")[:64] or None,
-            created_at_db=now,
+
         )
     )
     db.flush()
@@ -116,14 +116,17 @@ def rotate_refresh(db: Session, refresh_token: str, *, ip: str | None = None, us
     if session is None:
         raise unauthorized(code="auth.refresh_invalid", message="Refresh token invalid.")
     if session.revoked_at is not None or session.used_at is not None:
-        # Reuse detected — revoke the whole family.
+        # Reuse detected â€” revoke the whole family.
         db.query(RefreshSession).filter(RefreshSession.family_id == session.family_id).update(
             {RefreshSession.revoked_at: datetime.now(tz=UTC)}
         )
         db.flush()
         raise unauthorized(code="auth.refresh_reuse", message="Refresh token reuse detected.")
     now = datetime.now(tz=UTC)
-    if session.expires_at < now:
+    expires = session.expires_at
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=UTC)
+    if expires < now:
         raise unauthorized(code="auth.refresh_expired", message="Refresh token expired.")
     user = db.get(User, session.user_id)
     if user is None or not user.is_active:
@@ -143,7 +146,7 @@ def rotate_refresh(db: Session, refresh_token: str, *, ip: str | None = None, us
             expires_at=expires_at,
             user_agent=(user_agent or "")[:255] or None,
             ip=(ip or "")[:64] or None,
-            created_at_db=now,
+
         )
     )
     db.flush()
@@ -186,7 +189,7 @@ def start_password_reset(db: Session, *, email: str) -> PasswordResetTicket | No
             token_hash=hash_token(plain),
             created_at=now,
             expires_at=now + timedelta(minutes=settings.password_reset_ttl_min),
-            created_at_db=now,
+
         )
     )
     db.flush()
@@ -203,7 +206,10 @@ def complete_password_reset(db: Session, *, token: str, new_password: str) -> No
     if row is None or row.used_at is not None:
         raise unauthorized(code="auth.reset_invalid", message="Reset link invalid or used.")
     now = datetime.now(tz=UTC)
-    if row.expires_at < now:
+    expires = row.expires_at
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=UTC)
+    if expires < now:
         raise unauthorized(code="auth.reset_expired", message="Reset link expired.")
     user = db.get(User, row.user_id)
     if user is None:
@@ -225,3 +231,4 @@ def change_password(db: Session, user: User, *, current: str, new: str) -> None:
             "Password must be at least 10 characters and contain a letter and a digit."
         )
     user.password_hash = hash_password(new)
+

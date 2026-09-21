@@ -99,6 +99,8 @@ markers = [
     "e2e: playwright tests",
     "integration: requires DB",
 ]
+pythonpath = ["."]
 filterwarnings = [
     "ignore::DeprecationWarning",
+    "ignore::pytest.PytestUnknownMarkWarning",
 ]

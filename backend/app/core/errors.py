@@ -32,8 +32,8 @@ def unauthorized(message: str = "Authentication required.", code: str = "auth.re
     return AppError(status_code=status.HTTP_401_UNAUTHORIZED, code=code, message=message)
 
 
-def forbidden(message: str = "Forbidden.", code: str = "perm.forbidden") -> AppError:
-    return AppError(status_code=status.HTTP_403_FORBIDDEN, code=code, message=message)
+def forbidden(message: str = "Forbidden.", code: str = "perm.forbidden", details: dict[str, Any] | None = None) -> AppError:
+    return AppError(status_code=status.HTTP_403_FORBIDDEN, code=code, message=message, details=details)
 
 
 def not_found(message: str = "Not found.", code: str = "res.not_found") -> AppError:

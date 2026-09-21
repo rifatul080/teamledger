@@ -33,7 +33,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 def _set_auth_cookies(response: Response, *, access: str, refresh: str, csrf: str) -> None:
     settings = get_settings()
-    secure = settings.app_env != "development"
+    secure = settings.app_env not in {"development", "test"}
     response.set_cookie(
         "tl_access",
         access,
@@ -50,7 +50,7 @@ def _set_auth_cookies(response: Response, *, access: str, refresh: str, csrf: st
         secure=secure,
         samesite="lax",
         max_age=settings.refresh_token_ttl_days * 24 * 3600,
-        path="/api/v1/auth",
+        path="/",
     )
     response.set_cookie(
         "tl_csrf",
