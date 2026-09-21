@@ -1,11 +1,9 @@
 """Scoring + author order endpoints: live compute, finalize, exports."""
 from __future__ import annotations
 
-import json
 from decimal import Decimal
 
 import pytest
-
 from _helpers import AuthedClient, signup
 
 
@@ -38,7 +36,7 @@ def world(client):
 
 def _ms(leader: AuthedClient, project_id: str) -> str:
     g_id = leader.post(
-        f"/api/v1/goals",
+        "/api/v1/goals",
         json={"project_id": project_id, "title": "G", "target_date": "2026-12-31"},
     ).json()["id"]
     return leader.post(
@@ -79,7 +77,7 @@ def test_live_score_shape_with_zero_tasks(client, world) -> None:
 
 def test_live_score_includes_only_done_tasks(client, world) -> None:
     leader = world["leader"]
-    aisha = world["aisha"]
+    world["aisha"]
     ms = _ms(leader, world["project_id"])
     # Two tasks; one accepted (counts), one not accepted (does not count).
     t1 = _task(leader, ms, world["a_uid"])
@@ -129,7 +127,7 @@ def test_finalize_rejects_double_finalize(client, world) -> None:
 
 def test_finalize_persists_snapshot(client, world) -> None:
     leader = world["leader"]
-    aisha = world["aisha"]
+    world["aisha"]
     ms = _ms(leader, world["project_id"])
     t = _task(leader, ms, world["a_uid"])
     a = AuthedClient(client, "s1@example.org")
@@ -177,7 +175,7 @@ def test_snapshots_list_for_members(client, world) -> None:
 
 def test_export_csv_and_statement(client, world) -> None:
     leader = world["leader"]
-    aisha = world["aisha"]
+    world["aisha"]
     ms = _ms(leader, world["project_id"])
     t = _task(leader, ms, world["a_uid"])
     a = AuthedClient(client, "s1@example.org")
@@ -213,7 +211,7 @@ def test_export_csv_and_statement(client, world) -> None:
 
 
 def test_member_cannot_finalize(client, world) -> None:
-    leader = world["leader"]
+    world["leader"]
     aisha = world["aisha"]
     r = aisha.post(
         f"/api/v1/projects/{world['project_id']}/author-order/finalize",

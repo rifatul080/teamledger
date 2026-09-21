@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import pytest
-
 from _helpers import AuthedClient, signup
 
 
@@ -41,7 +40,7 @@ def _uid(c: AuthedClient) -> str:
 
 def _make_milestone(leader: AuthedClient, project_id: str) -> str:
     g = leader.post(
-        f"/api/v1/goals",
+        "/api/v1/goals",
         json={"project_id": project_id, "title": "G", "target_date": "2026-12-31"},
     ).json()
     m = leader.post(
@@ -119,7 +118,7 @@ def test_submit_and_review_flow(client, world) -> None:
     leader, member, _, project_id = world
     ms_id = _make_milestone(leader, project_id)
     mem_uid = _uid(member)
-    leader_uid = _uid(leader)
+    _uid(leader)
     leader.put(f"/api/v1/projects/{project_id}/participants", json={"user_ids": [mem_uid]})
     r = leader.post(
         "/api/v1/tasks",

@@ -6,11 +6,10 @@ next to each case show the hand-computed expected values.
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
-
 from app.scoring.engine import (
     AdjustmentInput,
     CategoryConfig,
@@ -68,7 +67,7 @@ def test_exact_due_date_full_points() -> None:
                 weight=10,
                 quality=5,
                 due=date(2025, 1, 10),
-                submitted_at=datetime(2025, 1, 10, 12, tzinfo=timezone.utc),
+                submitted_at=datetime(2025, 1, 10, 12, tzinfo=UTC),
             )
         ],
     )
@@ -90,7 +89,7 @@ def test_two_days_late_mild_band() -> None:
                 weight=5,
                 quality=5,
                 due=date(2025, 1, 10),
-                submitted_at=datetime(2025, 1, 12, tzinfo=timezone.utc),
+                submitted_at=datetime(2025, 1, 12, tzinfo=UTC),
             )
         ],
     )
@@ -112,7 +111,7 @@ def test_seven_days_late_medium_band_boundary() -> None:
                 weight=4,
                 quality=4,
                 due=date(2025, 1, 10),
-                submitted_at=datetime(2025, 1, 17, tzinfo=timezone.utc),
+                submitted_at=datetime(2025, 1, 17, tzinfo=UTC),
             )
         ],
     )
@@ -135,7 +134,7 @@ def test_eight_days_late_severe() -> None:
                 weight=10,
                 quality=5,
                 due=date(2025, 1, 10),
-                submitted_at=datetime(2025, 1, 18, tzinfo=timezone.utc),
+                submitted_at=datetime(2025, 1, 18, tzinfo=UTC),
             )
         ],
     )
@@ -150,7 +149,7 @@ def test_zero_quality_yields_zero_points() -> None:
         settings=_cfg(),
         categories=[CategoryConfig(code="writing_original_draft", multiplier=Decimal("1.0"))],
         participants=[],
-        tasks=[_t(quality=0, weight=10, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc))],
+        tasks=[_t(quality=0, weight=10, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=UTC))],
     )
     result = compute_project_score(inputs)
     assert result.task_breakdowns[0].points == Decimal("0.000000")
@@ -162,7 +161,7 @@ def test_weight_one_full_points() -> None:
         settings=_cfg(),
         categories=[CategoryConfig(code="writing_original_draft", multiplier=Decimal("1.0"))],
         participants=[],
-        tasks=[_t(weight=1, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc))],
+        tasks=[_t(weight=1, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=UTC))],
     )
     result = compute_project_score(inputs)
     assert result.task_breakdowns[0].points == Decimal("1.000000")
@@ -174,7 +173,7 @@ def test_weight_ten_full_points() -> None:
         settings=_cfg(),
         categories=[CategoryConfig(code="writing_original_draft", multiplier=Decimal("1.0"))],
         participants=[],
-        tasks=[_t(weight=10, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc))],
+        tasks=[_t(weight=10, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=UTC))],
     )
     result = compute_project_score(inputs)
     assert result.task_breakdowns[0].points == Decimal("10.000000")
@@ -193,7 +192,7 @@ def test_category_multiplier_zero_cancels_points() -> None:
                 quality=5,
                 category="project_administration",
                 due=date(2025, 1, 10),
-                submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc),
+                submitted_at=datetime(2025, 1, 10, tzinfo=UTC),
             )
         ],
     )
@@ -215,7 +214,7 @@ def test_category_multiplier_high() -> None:
                 quality=5,
                 category="software",
                 due=date(2025, 1, 10),
-                submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc),
+                submitted_at=datetime(2025, 1, 10, tzinfo=UTC),
             )
         ],
     )
@@ -231,8 +230,8 @@ def test_negative_adjustment_deducts() -> None:
         settings=_cfg(),
         categories=[CategoryConfig(code="writing_original_draft", multiplier=Decimal("1.0"))],
         participants=[ParticipantInput(user_id="u1", display_name="U")],
-        tasks=[_t(assignee="u1", weight=10, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc))],
-        adjustments=[AdjustmentInput(user_id="u1", delta=Decimal("-2.5"), reason="Late start", author_user_id="lead", created_at=datetime.now(tz=timezone.utc))],
+        tasks=[_t(assignee="u1", weight=10, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=UTC))],
+        adjustments=[AdjustmentInput(user_id="u1", delta=Decimal("-2.5"), reason="Late start", author_user_id="lead", created_at=datetime.now(tz=UTC))],
     )
     result = compute_project_score(inputs)
     assert result.participants[0].total_points == Decimal("7.500000")
@@ -246,8 +245,8 @@ def test_positive_adjustment() -> None:
         settings=_cfg(),
         categories=[CategoryConfig(code="writing_original_draft", multiplier=Decimal("1.0"))],
         participants=[ParticipantInput(user_id="u1", display_name="U")],
-        tasks=[_t(assignee="u1", weight=10, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc))],
-        adjustments=[AdjustmentInput(user_id="u1", delta=Decimal("3"), reason="Stretch", author_user_id="lead", created_at=datetime.now(tz=timezone.utc))],
+        tasks=[_t(assignee="u1", weight=10, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=UTC))],
+        adjustments=[AdjustmentInput(user_id="u1", delta=Decimal("3"), reason="Stretch", author_user_id="lead", created_at=datetime.now(tz=UTC))],
     )
     result = compute_project_score(inputs)
     assert result.participants[0].total_points == Decimal("13.000000")
@@ -262,8 +261,8 @@ def test_single_participant_total_is_their_sum() -> None:
         categories=[CategoryConfig(code="writing_original_draft", multiplier=Decimal("1.0"))],
         participants=[ParticipantInput(user_id="u1", display_name="U")],
         tasks=[
-            _t(task_id="t1", weight=4, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc)),
-            _t(task_id="t2", weight=6, quality=3, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 12, tzinfo=timezone.utc)),
+            _t(task_id="t1", weight=4, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=UTC)),
+            _t(task_id="t2", weight=6, quality=3, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 12, tzinfo=UTC)),
         ],
     )
     result = compute_project_score(inputs)
@@ -300,8 +299,8 @@ def test_tie_breaks_by_display_name() -> None:
             ParticipantInput(user_id="uA", display_name="Alice"),
         ],
         tasks=[
-            _t(task_id="t1", assignee="uZ", weight=5, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc)),
-            _t(task_id="t2", assignee="uA", weight=5, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc)),
+            _t(task_id="t1", assignee="uZ", weight=5, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=UTC)),
+            _t(task_id="t2", assignee="uA", weight=5, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=UTC)),
         ],
     )
     result = compute_project_score(inputs)
@@ -320,8 +319,8 @@ def test_tie_breaks_by_user_id_when_display_name_also_ties() -> None:
             ParticipantInput(user_id="uA", display_name="Z"),  # same display name
         ],
         tasks=[
-            _t(task_id="t1", assignee="uZ", weight=5, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc)),
-            _t(task_id="t2", assignee="uA", weight=5, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc)),
+            _t(task_id="t1", assignee="uZ", weight=5, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=UTC)),
+            _t(task_id="t2", assignee="uA", weight=5, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=UTC)),
         ],
     )
     result = compute_project_score(inputs)
@@ -342,9 +341,9 @@ def test_ties_at_every_position() -> None:
             ParticipantInput(user_id="uB", display_name="Bob"),
         ],
         tasks=[
-            _t(task_id="t1", assignee="uC", weight=5, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc)),
-            _t(task_id="t2", assignee="uA", weight=5, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc)),
-            _t(task_id="t3", assignee="uB", weight=5, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc)),
+            _t(task_id="t1", assignee="uC", weight=5, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=UTC)),
+            _t(task_id="t2", assignee="uA", weight=5, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=UTC)),
+            _t(task_id="t3", assignee="uB", weight=5, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=UTC)),
         ],
     )
     result = compute_project_score(inputs)
@@ -364,8 +363,8 @@ def test_pinned_position_first() -> None:
             ParticipantInput(user_id="uB", display_name="B"),
         ],
         tasks=[
-            _t(task_id="t1", assignee="uA", weight=5, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc)),
-            _t(task_id="t2", assignee="uB", weight=10, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc)),
+            _t(task_id="t1", assignee="uA", weight=5, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=UTC)),
+            _t(task_id="t2", assignee="uB", weight=10, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=UTC)),
         ],
         pinned=[PinnedPosition(position=1, user_id="uA", note="Lead the intro")],
     )
@@ -388,8 +387,8 @@ def test_pinned_position_last() -> None:
             ParticipantInput(user_id="uB", display_name="B"),
         ],
         tasks=[
-            _t(task_id="t1", assignee="uA", weight=5, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc)),
-            _t(task_id="t2", assignee="uB", weight=10, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc)),
+            _t(task_id="t1", assignee="uA", weight=5, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=UTC)),
+            _t(task_id="t2", assignee="uB", weight=10, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=UTC)),
         ],
         pinned=[PinnedPosition(position=2, user_id="uB", note="Senior last author")],
     )
@@ -426,7 +425,7 @@ def test_determinism_same_inputs_same_output() -> None:
             categories=[CategoryConfig(code="writing_original_draft", multiplier=Decimal("1.0"))],
             participants=[ParticipantInput(user_id="u1", display_name="U")],
             tasks=[
-                _t(assignee="u1", weight=7, quality=4, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 13, tzinfo=timezone.utc)),
+                _t(assignee="u1", weight=7, quality=4, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 13, tzinfo=UTC)),
             ],
         )
 
@@ -448,7 +447,7 @@ def test_submit_early_yields_full_points() -> None:
                 weight=8,
                 quality=4,
                 due=date(2025, 1, 20),
-                submitted_at=datetime(2025, 1, 5, tzinfo=timezone.utc),
+                submitted_at=datetime(2025, 1, 5, tzinfo=UTC),
             )
         ],
     )
@@ -466,7 +465,7 @@ def test_quality_1_low_score() -> None:
         categories=[CategoryConfig(code="writing_original_draft", multiplier=Decimal("1.0"))],
         participants=[],
         tasks=[
-            _t(weight=10, quality=1, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc))
+            _t(weight=10, quality=1, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=UTC))
         ],
     )
     result = compute_project_score(inputs)
@@ -481,7 +480,7 @@ def test_quality_3_mid_score() -> None:
         categories=[CategoryConfig(code="writing_original_draft", multiplier=Decimal("1.0"))],
         participants=[],
         tasks=[
-            _t(weight=5, quality=3, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc))
+            _t(weight=5, quality=3, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=UTC))
         ],
     )
     result = compute_project_score(inputs)
@@ -496,7 +495,7 @@ def test_late_with_high_quality() -> None:
         categories=[CategoryConfig(code="writing_original_draft", multiplier=Decimal("1.0"))],
         participants=[],
         tasks=[
-            _t(weight=6, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 13, tzinfo=timezone.utc))
+            _t(weight=6, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 13, tzinfo=UTC))
         ],
     )
     result = compute_project_score(inputs)
@@ -512,8 +511,8 @@ def test_share_pct_sums_to_100_when_total_above_zero() -> None:
         categories=[CategoryConfig(code="writing_original_draft", multiplier=Decimal("1.0"))],
         participants=[ParticipantInput(user_id="u1", display_name="A"), ParticipantInput(user_id="u2", display_name="B")],
         tasks=[
-            _t(assignee="u1", task_id="t1", weight=5, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc)),
-            _t(assignee="u2", task_id="t2", weight=5, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc)),
+            _t(assignee="u1", task_id="t1", weight=5, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=UTC)),
+            _t(assignee="u2", task_id="t2", weight=5, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=UTC)),
         ],
     )
     result = compute_project_score(inputs)
@@ -546,7 +545,7 @@ def test_rounding_half_up_six_places() -> None:
         categories=[CategoryConfig(code="writing_original_draft", multiplier=Decimal("1.0"))],
         participants=[ParticipantInput(user_id="u1", display_name="A")],
         tasks=[
-            _t(assignee="u1", weight=1, quality=1, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc))
+            _t(assignee="u1", weight=1, quality=1, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=UTC))
         ],
     )
     result = compute_project_score(inputs)
@@ -562,7 +561,7 @@ def test_overdue_long_period_caps_at_severe() -> None:
         categories=[CategoryConfig(code="writing_original_draft", multiplier=Decimal("1.0"))],
         participants=[],
         tasks=[
-            _t(weight=5, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 4, 20, tzinfo=timezone.utc))
+            _t(weight=5, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 4, 20, tzinfo=UTC))
         ],
     )
     result = compute_project_score(inputs)
@@ -583,7 +582,7 @@ def test_category_multiplier_two_with_late_penalty() -> None:
                 quality=4,
                 category="software",
                 due=date(2025, 1, 10),
-                submitted_at=datetime(2025, 1, 12, tzinfo=timezone.utc),
+                submitted_at=datetime(2025, 1, 12, tzinfo=UTC),
             )
         ],
     )
@@ -599,7 +598,7 @@ def test_custom_bands() -> None:
         categories=[CategoryConfig(code="writing_original_draft", multiplier=Decimal("1.0"))],
         participants=[],
         tasks=[
-            _t(weight=10, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 14, tzinfo=timezone.utc))
+            _t(weight=10, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 14, tzinfo=UTC))
         ],
     )
     result = compute_project_score(inputs)
@@ -616,7 +615,7 @@ def test_formula_engine_is_decimal_only() -> None:
         categories=[CategoryConfig(code="writing_original_draft", multiplier=Decimal("1.0"))],
         participants=[ParticipantInput(user_id="u1", display_name="A")],
         tasks=[
-            _t(assignee="u1", weight=3, quality=3, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc))
+            _t(assignee="u1", weight=3, quality=3, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=UTC))
         ],
     )
     result = compute_project_score(inputs)
@@ -650,7 +649,7 @@ def test_first_submission_only_for_lateness() -> None:
                 quality=5,
                 due=date(2025, 1, 10),
                 # First submission was on time
-                submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc),
+                submitted_at=datetime(2025, 1, 10, tzinfo=UTC),
             )
         ],
     )
@@ -668,8 +667,8 @@ def test_finalize_marks_difference_from_suggestion() -> None:
         categories=[CategoryConfig(code="writing_original_draft", multiplier=Decimal("1.0"))],
         participants=[ParticipantInput(user_id="u1", display_name="A"), ParticipantInput(user_id="u2", display_name="B")],
         tasks=[
-            _t(assignee="u1", task_id="t1", weight=10, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc)),
-            _t(assignee="u2", task_id="t2", weight=2, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc)),
+            _t(assignee="u1", task_id="t1", weight=10, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=UTC)),
+            _t(assignee="u2", task_id="t2", weight=2, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=UTC)),
         ],
         final_order=[
             FinalPosition(position=1, user_id="u2", note="Supervisor convention"),
@@ -694,8 +693,8 @@ def test_final_order_matches_suggestion_is_suggested_true() -> None:
         categories=[CategoryConfig(code="writing_original_draft", multiplier=Decimal("1.0"))],
         participants=[ParticipantInput(user_id="u1", display_name="A"), ParticipantInput(user_id="u2", display_name="B")],
         tasks=[
-            _t(assignee="u1", task_id="t1", weight=10, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc)),
-            _t(assignee="u2", task_id="t2", weight=2, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc)),
+            _t(assignee="u1", task_id="t1", weight=10, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=UTC)),
+            _t(assignee="u2", task_id="t2", weight=2, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=UTC)),
         ],
         final_order=[
             FinalPosition(position=1, user_id="u1", note=None),
@@ -719,8 +718,8 @@ def test_pinned_collides_with_existing_user() -> None:
             ParticipantInput(user_id="uB", display_name="B"),
         ],
         tasks=[
-            _t(assignee="uA", task_id="t1", weight=10, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc)),
-            _t(assignee="uB", task_id="t2", weight=2, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc)),
+            _t(assignee="uA", task_id="t1", weight=10, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=UTC)),
+            _t(assignee="uB", task_id="t2", weight=2, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=UTC)),
         ],
         pinned=[PinnedPosition(position=2, user_id="uB")],
     )
@@ -741,8 +740,8 @@ def test_by_category_breakdown_groups_correctly() -> None:
         ],
         participants=[ParticipantInput(user_id="u1", display_name="A")],
         tasks=[
-            _t(assignee="u1", task_id="t1", category="software", weight=5, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc)),
-            _t(assignee="u1", task_id="t2", category="writing_original_draft", weight=3, quality=4, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=timezone.utc)),
+            _t(assignee="u1", task_id="t1", category="software", weight=5, quality=5, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=UTC)),
+            _t(assignee="u1", task_id="t2", category="writing_original_draft", weight=3, quality=4, due=date(2025, 1, 10), submitted_at=datetime(2025, 1, 10, tzinfo=UTC)),
         ],
     )
     result = compute_project_score(inputs)
@@ -782,7 +781,7 @@ def test_hand_computed_table_batch() -> None:
                     weight=weight,
                     quality=quality,
                     due_date=date(2025, 1, 10),
-                    first_submitted_at=datetime(2025, 1, 10 + days, tzinfo=timezone.utc),
+                    first_submitted_at=datetime(2025, 1, 10 + days, tzinfo=UTC),
                 )
             ],
         )

@@ -71,7 +71,6 @@ def test_happy_paper_project(client, team_with_user) -> None:
 
 @pytest.mark.req_id("PROJ-02")
 def test_set_participants_rejects_non_member(client, team_with_user, make_user) -> None:
-    proj = make_user.__self__ if False else None  # type: ignore[attr-defined]
     r = client.post(f"/api/v1/teams/{team_with_user}/projects", json={"kind": "general", "name": "P"})
     pid = r.json()["id"]
     # Sign up an outsider

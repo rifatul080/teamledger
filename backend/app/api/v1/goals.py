@@ -325,7 +325,7 @@ def list_milestones(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ) -> list[MilestoneRead]:
-    g = _ensure_goal_access(db, goal_id, user)
+    _ensure_goal_access(db, goal_id, user)
     rows = (
         db.query(Milestone)
         .filter(Milestone.goal_id == goal_id)

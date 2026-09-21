@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from alembic import op
 
-
 revision = "0004_task_status_proposed"
 down_revision = "0003_milestone_completed_at"
 branch_labels = None

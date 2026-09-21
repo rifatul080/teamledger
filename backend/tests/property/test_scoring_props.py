@@ -1,10 +1,8 @@
 """Hypothesis property tests for scoring invariants."""
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-
-from hypothesis import HealthCheck, given, settings, strategies as st
 
 from app.scoring.engine import (
     AdjustmentInput,
@@ -15,7 +13,8 @@ from app.scoring.engine import (
     TimelinessConfig,
     compute_project_score,
 )
-
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
 
 # Strategies ----------------------------------------------------------------
 
@@ -85,7 +84,7 @@ def test_render_is_deterministic(participants, weight, quality, mult, days_late)
         _task_input(
             p.user_id, weight=weight, quality=quality,
             due=date(2025, 1, 10),
-            submitted=datetime(2025, 1, 10, tzinfo=timezone.utc) + timedelta(days=days_late),
+            submitted=datetime(2025, 1, 10, tzinfo=UTC) + timedelta(days=days_late),
         )
         for p in participants
     ]
@@ -118,7 +117,7 @@ def test_increasing_quality_never_decreases_points(mult, weight, quality) -> Non
         participants=[p_in],
         tasks=[
             _task_input("u1", weight=weight, quality=quality, due=date(2025, 1, 10),
-                        submitted=datetime(2025, 1, 10, tzinfo=timezone.utc)),
+                        submitted=datetime(2025, 1, 10, tzinfo=UTC)),
         ],
     )
     higher_quality = ProjectInputs(
@@ -128,7 +127,7 @@ def test_increasing_quality_never_decreases_points(mult, weight, quality) -> Non
         participants=[p_in],
         tasks=[
             _task_input("u1", weight=weight, quality=min(quality + 1, 5), due=date(2025, 1, 10),
-                        submitted=datetime(2025, 1, 10, tzinfo=timezone.utc)),
+                        submitted=datetime(2025, 1, 10, tzinfo=UTC)),
         ],
     )
     a = compute_project_score(base)
@@ -151,15 +150,14 @@ def test_add_task_for_one_does_not_change_others(participants, weight, quality, 
     u2 = participants[1].user_id
     base_tasks = [
         _task_input(u2, weight=weight, quality=quality, due=date(2025, 1, 10),
-                    submitted=datetime(2025, 1, 10, tzinfo=timezone.utc)),
+                    submitted=datetime(2025, 1, 10, tzinfo=UTC)),
     ]
     extra = ProjectInputs(
         project_id="p",
         settings=_ts(),
         categories=[CategoryConfig(code="writing_original_draft", multiplier=mult)],
         participants=participants,
-        tasks=base_tasks + [_task_input(u1, weight=weight, quality=quality, due=date(2025, 1, 10),
-                                        submitted=datetime(2025, 1, 10, tzinfo=timezone.utc))],
+        tasks=[*base_tasks, _task_input(u1, weight=weight, quality=quality, due=date(2025, 1, 10), submitted=datetime(2025, 1, 10, tzinfo=UTC))],
     )
     base = ProjectInputs(
         project_id="p",
@@ -184,7 +182,7 @@ def test_add_task_for_one_does_not_change_others(participants, weight, quality, 
 def test_shares_sum_to_100(participants, weight, quality) -> None:
     tasks = [
         _task_input(p.user_id, weight=weight, quality=quality, due=date(2025, 1, 10),
-                    submitted=datetime(2025, 1, 10, tzinfo=timezone.utc))
+                    submitted=datetime(2025, 1, 10, tzinfo=UTC))
         for p in participants
     ]
     inputs = ProjectInputs(
@@ -212,7 +210,7 @@ def test_order_independent_of_task_input_order(participants, weight, quality) ->
         return
     tasks = [
         _task_input(p.user_id, weight=weight, quality=quality, due=date(2025, 1, 10),
-                    submitted=datetime(2025, 1, 10, tzinfo=timezone.utc))
+                    submitted=datetime(2025, 1, 10, tzinfo=UTC))
         for p in participants
     ]
     inputs_a = ProjectInputs(
@@ -244,7 +242,7 @@ def test_ranking_is_deterministic(participants, weight, quality) -> None:
     """Repeated computation yields the same order."""
     tasks = [
         _task_input(p.user_id, weight=weight, quality=quality, due=date(2025, 1, 10),
-                    submitted=datetime(2025, 1, 10, tzinfo=timezone.utc))
+                    submitted=datetime(2025, 1, 10, tzinfo=UTC))
         for p in participants
     ]
     inputs = ProjectInputs(
@@ -270,9 +268,9 @@ def test_adjustments_apply_to_correct_user() -> None:
         participants=[p1, p2],
         tasks=[
             _task_input("u1", weight=5, quality=5, due=date(2025, 1, 10),
-                        submitted=datetime(2025, 1, 10, tzinfo=timezone.utc)),
+                        submitted=datetime(2025, 1, 10, tzinfo=UTC)),
             _task_input("u2", weight=5, quality=5, due=date(2025, 1, 10),
-                        submitted=datetime(2025, 1, 10, tzinfo=timezone.utc)),
+                        submitted=datetime(2025, 1, 10, tzinfo=UTC)),
         ],
     )
     adjusted = ProjectInputs(
@@ -282,12 +280,12 @@ def test_adjustments_apply_to_correct_user() -> None:
         participants=[p1, p2],
         tasks=[
             _task_input("u1", weight=5, quality=5, due=date(2025, 1, 10),
-                        submitted=datetime(2025, 1, 10, tzinfo=timezone.utc)),
+                        submitted=datetime(2025, 1, 10, tzinfo=UTC)),
             _task_input("u2", weight=5, quality=5, due=date(2025, 1, 10),
-                        submitted=datetime(2025, 1, 10, tzinfo=timezone.utc)),
+                        submitted=datetime(2025, 1, 10, tzinfo=UTC)),
         ],
         adjustments=[AdjustmentInput(user_id="u1", delta=Decimal("10"), reason="bonus", author_user_id="leader",
-                                     created_at=datetime.now(tz=timezone.utc))],
+                                     created_at=datetime.now(tz=UTC))],
     )
     base_r = compute_project_score(base)
     adj_r = compute_project_score(adjusted)

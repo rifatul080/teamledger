@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import pytest
-
 from _helpers import AuthedClient, signup
 
 
@@ -19,9 +18,9 @@ def project(client):
 
 
 def test_create_goal_get_list_delete(client, project) -> None:
-    leader, team_id, project_id = project
+    leader, _team_id, project_id = project
     r = leader.post(
-        f"/api/v1/goals",
+        "/api/v1/goals",
         json={"project_id": project_id, "title": "G1", "description": "d", "target_date": "2026-12-31"},
     )
     assert r.status_code == 201, r.text
@@ -50,7 +49,7 @@ def test_create_goal_get_list_delete(client, project) -> None:
 def test_create_milestone_get_list_delete(client, project) -> None:
     leader, _, project_id = project
     g_id = leader.post(
-        f"/api/v1/goals",
+        "/api/v1/goals",
         json={"project_id": project_id, "title": "G1", "target_date": "2026-12-31"},
     ).json()["id"]
     r = leader.post(
@@ -87,14 +86,14 @@ def test_member_cannot_create_goal(client, project) -> None:
     ).json()
     member.post(f"/api/v1/invitations/{r['token']}/accept")
     r = member.post(
-        f"/api/v1/goals",
+        "/api/v1/goals",
         json={"project_id": project_id, "title": "G1", "target_date": "2026-12-31"},
     )
     assert r.status_code == 403
 
 
 def test_anon_cannot_read_goals(client, project, app) -> None:
-    leader, _, project_id = project
+    _leader, _, project_id = project
     # Use a fresh client with no cookies
     from fastapi.testclient import TestClient
 
@@ -106,7 +105,7 @@ def test_anon_cannot_read_goals(client, project, app) -> None:
 def test_milestone_toggle_complete(client, project) -> None:
     leader, _, project_id = project
     g_id = leader.post(
-        f"/api/v1/goals",
+        "/api/v1/goals",
         json={"project_id": project_id, "title": "G1", "target_date": "2026-12-31"},
     ).json()["id"]
     m_id = leader.post(

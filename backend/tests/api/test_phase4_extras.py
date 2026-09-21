@@ -5,7 +5,6 @@ import io
 import zipfile
 
 import pytest
-
 from _helpers import AuthedClient, signup
 
 
@@ -122,7 +121,7 @@ def test_schedules_upsert_get_calendar_timeline(client, world) -> None:
 
 def test_member_cannot_set_plan(client, world) -> None:
     member = world["member"]
-    leader = world["leader"]
+    world["leader"]
     team_id = world["team_id"]
     m_id = member.get("/api/v1/me").json()["id"]
     r = member.put(

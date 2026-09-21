@@ -40,6 +40,12 @@ test = [
     "freezegun>=1.5",
     "respx>=0.21",
 ]
+dev = [
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "bandit>=1.7",
+    "pip-audit>=2.7",
+]
 
 [tool.setuptools]
 package-dir = {"" = "."}
@@ -58,7 +64,7 @@ select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
 ignore = ["E501", "B008", "RUF006", "SIM105"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["B011", "B017"]
+"tests/*" = ["B011", "B017", "RUF002", "RUF003"]
 "app/main.py" = ["B008"]
 
 [tool.mypy]

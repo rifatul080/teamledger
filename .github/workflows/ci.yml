@@ -8,6 +8,7 @@ on:
 
 jobs:
   backend:
+    name: backend (postgres)
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -38,7 +39,7 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[api,test]"
+          pip install -e ".[api,test,dev]"
       - name: Lint (ruff)
         run: ruff check .
       - name: Type (mypy strict)
@@ -51,6 +52,26 @@ jobs:
         run: alembic upgrade head
       - name: Pytest
         run: pytest -q --maxfail=1 --cov=app --cov-report=xml --cov-report=term
+
+  backend-sqlite:
+    name: backend (sqlite)
+    runs-on: ubuntu-latest
+    env:
+      # In-memory SQLite per test (driven by tests/conftest.py).
+      SECRET_KEY: ci-secret-key-please-change
+      STORAGE_LOCAL_ROOT: /tmp/teamledger-files
+      APP_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[api,test,dev]"
+      - name: Pytest (SQLite, no Docker)
+        run: pytest -q --maxfail=1
 
   frontend:
     runs-on: ubuntu-latest

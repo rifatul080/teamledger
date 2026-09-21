@@ -1,25 +1,21 @@
 """Shared test fixtures and helpers."""
 from __future__ import annotations
 
-import os
-import tempfile
 import uuid
 from collections.abc import Iterator
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import pytest
+from app.core.clock import FakeClock
+from app.core.security import hash_password
+from app.core.tokens import encode_jwt
+from app.db.session import reset_engine_for_tests
+from app.main import create_app
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
-
-from app.core.clock import Clock, FakeClock
-from app.core.security import hash_password
-from app.core.tokens import encode_jwt
-from app.db.base import Base
-from app.db.session import get_sessionmaker, reset_engine_for_tests
-from app.main import create_app
 
 
 @pytest.fixture(scope="function")
@@ -100,12 +96,12 @@ def client(app) -> Iterator[TestClient]:
 @pytest.fixture(scope="function")
 def clock() -> FakeClock:
     """Injectable clock for time-dependent tests."""
-    return FakeClock(start=datetime(2025, 1, 1, tzinfo=timezone.utc))
+    return FakeClock(start=datetime(2025, 1, 1, tzinfo=UTC))
 
 
 @pytest.fixture
 def make_user(db: Session):
-    def _factory(email: str = None, display_name: str = "Test User", password: str = "Password1Demo", tz: str = "UTC") -> Any:
+    def _factory(email: str | None = None, display_name: str = "Test User", password: str = "Password1Demo", tz: str = "UTC") -> Any:
         from app.models.user import User
 
         u = User(
@@ -115,7 +111,7 @@ def make_user(db: Session):
             timezone=tz,
             password_hash=hash_password(password),
             is_active=True,
-            created_at=datetime.now(tz=timezone.utc),
+            created_at=datetime.now(tz=UTC),
         )
         db.add(u)
         db.flush()
@@ -149,7 +145,7 @@ def seed_team(db, make_user):
         name="Test Team",
         description="",
         archived=False,
-        created_at=datetime.now(tz=timezone.utc),
+        created_at=datetime.now(tz=UTC),
     )
     db.add(team)
     db.flush()
