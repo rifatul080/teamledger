@@ -54,3 +54,4 @@ Thumbs.db
 
 # Puku editor meta
 .puku/
+*.log
