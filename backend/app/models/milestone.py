@@ -1,9 +1,9 @@
 """Milestone model."""
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
-from sqlalchemy import Date, ForeignKey, String
+from sqlalchemy import Date, DateTime, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..db.base import Base, TimestampMixin
@@ -16,3 +16,4 @@ class Milestone(Base, TimestampMixin):
     goal_id: Mapped[str] = mapped_column(String(32), ForeignKey("goals.id"), nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     due_date: Mapped[date] = mapped_column(Date, nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

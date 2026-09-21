@@ -10,6 +10,9 @@ from pydantic import Field
 from .common import ORMModel
 
 TaskStatus = Literal["todo", "in_progress", "in_review", "needs_rework", "done"]
+TaskStatusWithProposal = Literal[
+    "proposed", "todo", "in_progress", "in_review", "needs_rework", "done"
+]
 
 
 class TaskCreate(ORMModel):
@@ -76,7 +79,7 @@ class TaskRead(ORMModel):
     est_hours: int
     start_date: date
     due_date: date
-    status: TaskStatus
+    status: TaskStatusWithProposal
     points_awarded: Decimal | None
     first_submitted_at: datetime | None
     accepted_at: datetime | None

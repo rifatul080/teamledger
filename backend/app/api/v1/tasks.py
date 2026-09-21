@@ -307,7 +307,8 @@ def approve_proposal(
     t = _get_task(db, task_id)
     proj = _project_of_task(db, t)
     require_role(proj.team_id, db, user.id, role="leader")
-    task_service.approve_proposed_task(db, task=t, assignee=(t.assignee and db.get(User, t.assignee_user_id)) or user, actor=user)
+    assignee = db.get(User, t.assignee_user_id) or user
+    task_service.approve_proposed_task(db, task=t, assignee=assignee, actor=user)
     db.commit()
     return TaskRead.model_validate(t)
 

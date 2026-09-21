@@ -43,7 +43,7 @@ def update_goal(db: Session, goal: Goal, **fields) -> Goal:
 
 def goal_progress(db: Session, goal: Goal) -> float:
     """0..100 progress percentage."""
-    ms_ids = [m.id for m in goal.milestones]
+    ms_ids = [m.id for m in db.query(Milestone).filter(Milestone.goal_id == goal.id).all()]
     if not ms_ids:
         return 0.0
     rows = (
@@ -115,9 +115,9 @@ def create_task(
         est_hours=est_hours,
         start_date=start_date,
         due_date=due_date,
-        status="todo",
+        status=("proposed" if proposed else "todo"),
         proposed=proposed,
-        proposer_user_id=proposer.id if proposer else None,
+        proposer_user_id=(proposer.id if proposer else None),
         split_from_task_id=split_from_task_id,
     )
     db.add(t)
@@ -236,6 +236,7 @@ def approve_proposed_task(db: Session, *, task: Task, assignee: User, actor: Use
         raise validation("Assignee must be a project participant.", code="task.assignee_not_participant")
     task.assignee_user_id = assignee.id
     task.proposed = False
+    task.status = "todo"
     db.flush()
     return task
 

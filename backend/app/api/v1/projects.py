@@ -42,9 +42,12 @@ def create_project(
     user: User = Depends(current_user),
 ) -> ProjectRead:
     require_role(team_id, db, user.id, role="leader")
+    team = _team(db, team_id)
+    if team is None:
+        raise not_found(code="team.not_found")
     proj = project_service.create_project(
         db,
-        team=db.get(Project, team_id) or _team(db, team_id),
+        team=team,
         actor=user,
         kind=payload.kind,
         name=payload.name,

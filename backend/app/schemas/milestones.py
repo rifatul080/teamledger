@@ -1,7 +1,7 @@
 """Milestone schemas."""
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import Field
 
@@ -9,7 +9,6 @@ from .common import ORMModel
 
 
 class MilestoneCreate(ORMModel):
-    goal_id: str
     title: str = Field(min_length=1, max_length=255)
     due_date: date
 
@@ -20,8 +19,10 @@ class MilestoneRead(ORMModel):
     title: str
     due_date: date
     progress_pct: float = 0.0
+    completed_at: datetime | None = None
 
 
 class MilestoneUpdate(ORMModel):
     title: str | None = None
     due_date: date | None = None
+    complete: bool | None = None
