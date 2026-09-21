@@ -199,3 +199,48 @@ def test_anon_cannot_read_task(client, world, app) -> None:
     anon = TestClient(app)
     r = anon.get(f"/api/v1/tasks/{task_id}")
     assert r.status_code == 401
+
+
+def test_review_reject_sets_needs_rework_then_resubmit(client, world) -> None:
+    leader, member, _, project_id = world
+    ms_id = _make_milestone(leader, project_id)
+    mem_uid = _uid(member)
+    leader.put(f"/api/v1/projects/{project_id}/participants", json={"user_ids": [mem_uid]})
+    r = leader.post("/api/v1/tasks", json=_task_base(ms_id, mem_uid))
+    assert r.status_code == 201, r.text
+    task_id = r.json()["id"]
+    # First submission
+    r = member.post(f"/api/v1/tasks/{task_id}/submit", json={"note": "v1"})
+    assert r.status_code == 200, r.text
+    # Leader rejects → needs_rework
+    r = leader.post(
+        f"/api/v1/tasks/{task_id}/review",
+        json={"decision": "reject", "quality": 2, "note": "fix bugs"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "needs_rework"
+    # Member resubmits → in_review
+    r = member.post(f"/api/v1/tasks/{task_id}/submit", json={"note": "v2"})
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "in_review"
+    # Leader accepts → done
+    r = leader.post(
+        f"/api/v1/tasks/{task_id}/review",
+        json={"decision": "accept", "quality": 4, "note": "ok"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "done"
+
+
+def test_member_cannot_review_others_task(client, world) -> None:
+    leader, member, _, project_id = world
+    ms_id = _make_milestone(leader, project_id)
+    mem_uid = _uid(member)
+    leader.put(f"/api/v1/projects/{project_id}/participants", json={"user_ids": [mem_uid]})
+    r = leader.post("/api/v1/tasks", json=_task_base(ms_id, mem_uid))
+    task_id = r.json()["id"]
+    r = member.post(
+        f"/api/v1/tasks/{task_id}/review",
+        json={"decision": "accept", "quality": 3},
+    )
+    assert r.status_code == 403
