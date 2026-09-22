@@ -159,6 +159,44 @@ def create_app() -> FastAPI:
         return {"now": SystemClock().now().isoformat()}
 
     app.include_router(api_v1_router)
+
+    @app.get("/robots.txt", include_in_schema=False)
+    async def robots_txt():
+        from starlette.responses import PlainTextResponse
+
+        body = (
+            "User-agent: *\n"
+            "Allow: /\n"
+            "Disallow: /dashboard\n"
+            "Disallow: /teams\n"
+            "Disallow: /projects\n"
+            "Disallow: /notifications\n"
+            "Disallow: /me\n"
+            "Disallow: /api/\n"
+        )
+        return PlainTextResponse(body, media_type="text/plain")
+
+    @app.get("/sitemap.xml", include_in_schema=False)
+    async def sitemap_xml():
+        from starlette.responses import Response as _Resp
+
+        base = settings.public_base_url.rstrip("/")
+        urls = ["", "/login", "/signup"]
+        xml = ['<?xml version="1.0" encoding="UTF-8"?>']
+        xml.append('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">')
+        from datetime import UTC, datetime
+
+        for u in urls:
+            xml.append(
+                "  <url><loc>"
+                + f"{base}{u}"
+                + "</loc><lastmod>"
+                + datetime.now(tz=UTC).date().isoformat()
+                + "</lastmod></url>"
+            )
+        xml.append("</urlset>")
+        return _Resp("\n".join(xml), media_type="application/xml")
+
     return app
 
 
