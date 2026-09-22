@@ -1,134 +1,114 @@
-// Team detail: projects + invite + chat link.
-import { useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useCreateProject, useInviteMember, useTeam, useTeamProjects } from "../app/routes";
-import { Button, Card, ErrorBox, Input, Label, Select } from "../components/ui";
+import { useTeam, useTeamMembers, useTeamProjects } from "../app/data";
+import { useActivity } from "../app/notifications";
+import { Avatar } from "../components/ui/Avatar";
+import { EmptyState } from "../components/ui/EmptyState";
 
 export default function TeamDetailPage() {
-  const { teamId } = useParams<{ teamId: string }>();
+  const { teamId } = useParams();
   const team = useTeam(teamId);
   const projects = useTeamProjects(teamId);
-  const invite = useInviteMember(teamId ?? "");
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState<"leader" | "member">("member");
-  const [error, setError] = useState<string | null>(null);
-  const [projectName, setProjectName] = useState("");
-  const [projectKind, setProjectKind] = useState<"general" | "paper">("general");
+  const members = useTeamMembers(teamId);
+  const activity = useActivity(teamId);
 
-  const createProject = useCreateProject(teamId ?? "");
+  if (!teamId) return null;
+  if (team.isLoading) return <div className="text-meta">Loading team…</div>;
+  if (!team.data) return <EmptyState title="Team not found" body="It may have been archived or removed." />;
 
-  async function submitInvite(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    try {
-      await invite.mutateAsync({ email, role });
-      setEmail("");
-    } catch (err) {
-      setError((err as Error).message);
-    }
-  }
-
-  async function submitProject(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    try {
-      await createProject.mutateAsync({
-        kind: projectKind,
-        name: projectName,
-        participant_user_ids: [],
-      });
-      setProjectName("");
-    } catch (err) {
-      setError((err as Error).message);
-    }
-  }
-
+  const t = team.data;
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">{team.data?.name ?? "Team"}</h1>
+      <header className="flex items-end justify-between gap-4">
+        <div>
+          <h1 className="text-h1">{t.name}</h1>
+          {t.description && <p className="text-meta">{t.description}</p>}
+        </div>
+        <div className="flex items-center gap-2">
+          <Link to={`/teams/${t.id}/chat`} className="btn-secondary">
+            Open chat
+          </Link>
+        </div>
+      </header>
 
-      <Card>
-        <h2 className="text-sm font-semibold mb-2">Create a project</h2>
-        <form className="flex gap-2 items-end" onSubmit={submitProject}>
-          <div className="flex-1">
-            <Label htmlFor="proj_name">Name</Label>
-            <Input
-              id="proj_name"
-              required
-              value={projectName}
-              onChange={(e) => setProjectName(e.target.value)}
-            />
-          </div>
-          <div>
-            <Label htmlFor="kind">Kind</Label>
-            <Select
-              id="kind"
-              value={projectKind}
-              onChange={(e) => setProjectKind(e.target.value as "general" | "paper")}
+      <div className="grid lg:grid-cols-3 gap-6">
+        <section className="card lg:col-span-2">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-h2">Projects</h2>
+            <Link
+              to={`/teams/${t.id}/projects/new`}
+              className="btn-secondary btn-sm"
             >
-              <option value="general">General</option>
-              <option value="paper">Paper</option>
-            </Select>
+              New project
+            </Link>
           </div>
-          <Button type="submit" disabled={createProject.isPending}>
-            Create
-          </Button>
-        </form>
-        <ErrorBox message={error ?? undefined} />
-      </Card>
-
-      <Card>
-        <h2 className="text-sm font-semibold mb-2">Projects</h2>
-        {projects.isLoading ? (
-          <div className="text-slate-500">Loading…</div>
-        ) : projects.data && projects.data.length > 0 ? (
-          <ul className="flex flex-col gap-2">
-            {projects.data.map((p) => (
-              <li key={p.id} className="flex items-center justify-between border-b pb-2">
-                <Link to={`/projects/${p.id}`} className="text-blue-700 underline">
-                  {p.name}
+          {(projects.data?.length ?? 0) === 0 ? (
+            <EmptyState
+              title="No projects yet."
+              body="A project groups goals and tasks that share a single paper or scope."
+              action={
+                <Link
+                  to={`/teams/${t.id}/projects/new`}
+                  className="btn-primary"
+                >
+                  Create the first project
                 </Link>
-                <span className="text-xs text-slate-500">{p.kind}</span>
+              }
+            />
+          ) : (
+            <ul className="grid sm:grid-cols-2 gap-3">
+              {(projects.data ?? []).map((p) => (
+                <li key={p.id} className="surface p-3">
+                  <Link to={`/projects/${p.id}`} className="block">
+                    <div className="font-medium">{p.name}</div>
+                    <div className="text-faint uppercase font-mono">
+                      {p.kind}
+                      {p.finalized_at ? " · finalized" : ""}
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <aside className="card">
+          <h2 className="text-h2 mb-3">Members</h2>
+          <ul className="flex flex-col gap-2">
+            {(members.data ?? []).map((m) => (
+              <li key={m.user_id} className="flex items-center gap-2">
+                <Avatar
+                  userId={m.user_id}
+                  displayName={m.display_name}
+                  src={m.avatar_url ?? null}
+                  size="sm"
+                />
+                <div className="min-w-0">
+                  <div className="text-sm truncate">{m.display_name}</div>
+                  <div className="text-faint truncate">{m.role}</div>
+                </div>
               </li>
             ))}
           </ul>
+        </aside>
+      </div>
+
+      <section className="card">
+        <h2 className="text-h2 mb-3">Recent activity</h2>
+        {(activity.data?.items ?? []).length === 0 ? (
+          <div className="text-meta">Nothing yet.</div>
         ) : (
-          <div className="text-slate-500">No projects yet.</div>
+          <ul className="divide-y divide-line">
+            {(activity.data?.items ?? []).slice(0, 12).map((it) => (
+              <li key={it.id} className="py-2 flex items-center gap-3">
+                <span className="text-meta flex-1">{it.body}</span>
+                <span className="text-faint">
+                  {new Date(it.created_at).toLocaleString()}
+                </span>
+              </li>
+            ))}
+          </ul>
         )}
-      </Card>
-
-      <Card>
-        <h2 className="text-sm font-semibold mb-2">Invite member</h2>
-        <form className="flex gap-2 items-end" onSubmit={submitInvite}>
-          <div className="flex-1">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-          <div>
-            <Label htmlFor="role">Role</Label>
-            <Select id="role" value={role} onChange={(e) => setRole(e.target.value as "leader" | "member")}>
-              <option value="member">Member</option>
-              <option value="leader">Leader</option>
-            </Select>
-          </div>
-          <Button type="submit" disabled={invite.isPending}>
-            Invite
-          </Button>
-        </form>
-        <ErrorBox message={error ?? undefined} />
-      </Card>
-
-      <Card>
-        <Link to={`/teams/${teamId}/chat`} className="text-blue-700 underline">
-          Open chat →
-        </Link>
-      </Card>
+      </section>
     </div>
   );
 }

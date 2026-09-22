@@ -7,14 +7,12 @@ import App from "./App";
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { retry: 1, staleTime: 30_000, refetchOnWindowFocus: false },
+    queries: { retry: 1, staleTime: 15_000, refetchOnWindowFocus: false },
   },
 });
 
 const root = document.getElementById("root");
-if (!root) {
-  throw new Error("Missing #root");
-}
+if (!root) throw new Error("Missing #root");
 
 ReactDOM.createRoot(root).render(
   <React.StrictMode>

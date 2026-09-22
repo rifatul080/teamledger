@@ -1,5 +1,5 @@
 // Thin fetch wrapper. Same-origin + credentials so HttpOnly cookies flow.
-// Reads X-CSRF-Token from /csrf endpoint or from cookie for unsafe methods.
+// Reads X-CSRF-Token from cookie for unsafe methods.
 
 const BASE = "/api/v1";
 
@@ -11,121 +11,110 @@ function getCsrf(): string | null {
   if (typeof document === "undefined") return null;
   const m = document.cookie.split(/;\s*/).find((c) => c.startsWith(`${CSRF_COOKIE}=`));
   if (!m) return null;
-  return decodeURIComponent(m.slice(CSRF_COOKIE.length + 1));
+  try {
+    return decodeURIComponent(m.slice(CSRF_COOKIE.length + 1));
+  } catch {
+    return null;
+  }
 }
 
 export class ApiError extends Error {
   status: number;
   code: string;
-  details: unknown;
-  constructor(status: number, body: { code?: string; message?: string; details?: unknown }) {
-    super(body.message ?? `HTTP ${status}`);
+  details?: unknown;
+  constructor(status: number, code: string, message: string, details?: unknown) {
+    super(message);
     this.status = status;
-    this.code = body.code ?? "unknown";
-    this.details = body.details;
+    this.code = code;
+    this.details = details;
   }
 }
 
-export async function api<T = unknown>(
-  path: string,
-  init: { method?: Method; json?: unknown; body?: BodyInit; params?: Record<string, string | number | boolean>; signal?: AbortSignal } = {},
-): Promise<T> {
-  const method = init.method ?? "GET";
-  const search = init.params
-    ? "?" + new URLSearchParams(Object.entries(init.params).map(([k, v]) => [k, String(v)])).toString()
-    : "";
-  const headers: Record<string, string> = { Accept: "application/json" };
-  let body: BodyInit | undefined = init.body;
-  if (init.json !== undefined) {
-    headers["Content-Type"] = "application/json";
-    body = JSON.stringify(init.json);
+export type ApiOpts = {
+  method?: Method;
+  json?: unknown;
+  body?: BodyInit;
+  params?: Record<string, string | number | boolean | undefined | null>;
+  signal?: AbortSignal;
+  /** When true, do not set Content-Type (use for FormData). */
+  raw?: boolean;
+  /** Skip CSRF — for first-time login/signup before a cookie is present. */
+  skipCsrf?: boolean;
+};
+
+export async function api<T = unknown>(path: string, opts: ApiOpts = {}): Promise<T> {
+  const url = new URL(BASE + path, window.location.origin);
+  if (opts.params) {
+    for (const [k, v] of Object.entries(opts.params)) {
+      if (v === undefined || v === null) continue;
+      url.searchParams.set(k, String(v));
+    }
   }
-  if (method !== "GET") {
+  const headers: Record<string, string> = {};
+  if (!opts.raw) headers["Content-Type"] = "application/json";
+  const method = opts.method ?? "GET";
+  if (method !== "GET" && !opts.skipCsrf) {
     const csrf = getCsrf();
     if (csrf) headers["X-CSRF-Token"] = csrf;
   }
-  const res = await fetch(BASE + path + search, {
+  const init: RequestInit = {
     method,
-    headers,
-    body,
     credentials: "include",
-    signal: init.signal,
-  });
-  const text = await res.text();
-  let parsed: unknown = null;
-  if (text) {
+    headers,
+  };
+  if (opts.signal) init.signal = opts.signal;
+  if (opts.body !== undefined) init.body = opts.body;
+  else if (opts.json !== undefined) init.body = JSON.stringify(opts.json);
+
+  const res = await fetch(url.toString(), init);
+  const ct = res.headers.get("content-type") ?? "";
+  let payload: unknown = undefined;
+  if (ct.includes("application/json")) {
     try {
-      parsed = JSON.parse(text);
+      payload = await res.json();
     } catch {
-      parsed = text;
+      payload = undefined;
+    }
+  } else if (res.status !== 204) {
+    try {
+      payload = await res.text();
+    } catch {
+      /* ignore */
     }
   }
   if (!res.ok) {
-    const errBody = (parsed && typeof parsed === "object" ? parsed : {}) as {
-      code?: string;
-      message?: string;
-      details?: unknown;
-    };
-    throw new ApiError(res.status, errBody);
+    const body = (payload ?? {}) as { code?: string; message?: string; details?: unknown };
+    throw new ApiError(
+      res.status,
+      body.code ?? `http.${res.status}`,
+      body.message ?? res.statusText,
+      body.details,
+    );
   }
-  return parsed as T;
+  return payload as T;
 }
 
-export async function apiUpload<T = unknown>(path: string, form: FormData): Promise<T> {
+export async function apiDownload(path: string, opts: ApiOpts = {}): Promise<Blob> {
+  const url = new URL(BASE + path, window.location.origin);
+  if (opts.params) {
+    for (const [k, v] of Object.entries(opts.params)) {
+      if (v === undefined || v === null) continue;
+      url.searchParams.set(k, String(v));
+    }
+  }
   const headers: Record<string, string> = {};
-  const csrf = getCsrf();
-  if (csrf) headers["X-CSRF-Token"] = csrf;
-  const res = await fetch(BASE + path, {
-    method: "POST",
-    body: form,
+  const method = opts.method ?? "GET";
+  if (method !== "GET" && !opts.skipCsrf) {
+    const csrf = getCsrf();
+    if (csrf) headers["X-CSRF-Token"] = csrf;
+  }
+  const res = await fetch(url.toString(), {
+    method,
     credentials: "include",
     headers,
+    body:
+      opts.body ?? (opts.json !== undefined ? JSON.stringify(opts.json) : undefined),
   });
-  const text = await res.text();
-  let parsed: unknown = null;
-  if (text) {
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      parsed = text;
-    }
-  }
-  if (!res.ok) {
-    const errBody = (parsed && typeof parsed === "object" ? parsed : {}) as {
-      code?: string;
-      message?: string;
-    };
-    throw new ApiError(res.status, errBody);
-  }
-  return parsed as T;
-}
-
-export function downloadUrl(path: string, params: Record<string, string> = {}): string {
-  const search = new URLSearchParams(params).toString();
-  return BASE + path + (search ? `?${search}` : "");
-}
-
-export async function openDownload(path: string, params: Record<string, string> = {}): Promise<void> {
-  const url = downloadUrl(path, params);
-  const res = await fetch(url, { credentials: "include" });
-  if (!res.ok) {
-    let body: { code?: string; message?: string } = {};
-    try {
-      body = await res.json();
-    } catch {
-      // ignore
-    }
-    throw new ApiError(res.status, body);
-  }
-  const blob = await res.blob();
-  const objectUrl = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = objectUrl;
-  const cd = res.headers.get("Content-Disposition") ?? "";
-  const match = /filename="([^"]+)"/.exec(cd);
-  a.download = match && match[1] ? match[1] : "download";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(objectUrl);
+  if (!res.ok) throw new ApiError(res.status, `http.${res.status}`, res.statusText);
+  return res.blob();
 }
