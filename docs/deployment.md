@@ -135,3 +135,44 @@ The system is sized for **10–50 active researchers** per server:
      `app/core/tokens.py`).
   2. After grace period, switch to the new key only.
   3. Old tokens are invalidated on next refresh.
+
+
+## v2: free-tier production deploy
+
+This round ships a one-service deploy that runs the FastAPI process and serves the built React SPA from the same origin. No separate static host.
+
+### Provisioning (one-time, owner steps)
+
+1. **Neon** at https://neon.tech: free Postgres, scales to zero. Create a project named `teamledger`, copy the connection string (it looks like `postgresql://USER:PASS@ep-xxx.us-east-2.aws.neon.tech/neondb?sslmode=require`).
+2. **Render** at https://render.com: connect the GitHub repo, choose "Web Service" from this repo, point at `backend/Dockerfile`. Set `DATABASE_URL` to the Neon string above. Pick the Free plan.
+3. **Resend** (optional) at https://resend.com: free tier 100 emails/day. Verify a domain or use the sandbox sender, then paste the API key as `RESEND_API_KEY` in Render's env vars. Without a key the app keeps working - emails just print to the server log.
+4. (Optional) **Custom domain**: buy one, set `PUBLIC_BASE_URL`, add the DNS CNAME Render gives you.
+
+### Expected free-tier behaviors
+
+- **Render free web service sleeps after ~15 min idle.** The next request takes several seconds while it wakes; this is normal, not a bug.
+- **Neon free Postgres scales to zero when idle.** Same pattern - first query after a quiet period takes ~1-2s longer while the compute warms. The connection string stays valid.
+- **Storage is local to the Render service.** Avatars and files do NOT survive a redeploy that wipes the disk. For real production install, swap `STORAGE_BACKEND=local` for an S3-compatible backend.
+
+### Backups
+
+`backend/scripts/backup_db.py` is runnable against any URL.
+
+- SQLite: copy the file.
+- Postgres: `pg_dump -Fc` to `./storage/backups/teamledger-pg-YYYYMMDDTHHMMSSZ.dump`.
+
+Run it manually:
+
+    python scripts/backup_db.py --url $DATABASE_URL --out ./storage/backups
+
+This script does NOT depend on the application; it shells out to pg_dump / file copy. It works during an outage.
+
+### Roll-back
+
+- Render keeps the previous deploy. Use the dashboard's "Roll back" button to redeploy an earlier image.
+- For DB rollback: pick the most recent backup and restore via `pg_restore` into a fresh Neon branch, then point `DATABASE_URL` at the new branch.
+
+### What to do if the WebSocket drops in production
+
+- The frontend uses an exponential-backoff reconnect loop. No action needed unless reconnect storms spam logs - if you see them, check Render's process metrics for the cause (usually instance sleep + wake).
+- The chat page degrades gracefully to "You are offline" until reconnect, with an automatic resume on the next successful socket handshake.

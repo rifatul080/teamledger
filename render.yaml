@@ -1,0 +1,38 @@
+# Render blueprint — single web service that runs the FastAPI app and serves
+# the built frontend from the same origin (no separate static host needed).
+#
+# Apply: render blueprint launch (or `render deploys create` after connecting
+# the repo). This file documents the env-var contract and the build command;
+# the actual service will be created the first time you push to the connected
+# branch on a Render account you own.
+
+services:
+  - type: web
+    name: teamledger
+    plan: free
+    runtime: docker
+    rootDir: .
+    dockerfilePath: ./backend/Dockerfile
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      # ---- required secrets (set in the Render dashboard, never commit) ----
+      - key: DATABASE_URL
+        sync: false  # paste the Neon connection string here
+      - key: SECRET_KEY
+        sync: false  # any 32+ random bytes
+      - key: RESEND_API_KEY
+        sync: false  # leave blank for console mailer during dev
+      # ---- non-secret config ----
+      - key: APP_ENV
+        value: production
+      - key: MAIL_BACKEND
+        value: resend  # switch to "console" for free-tier without a key
+      - key: RESEND_FROM
+        value: TeamLedger <noreply@teamledger.app>
+      - key: PUBLIC_BASE_URL
+        value: https://teamledger.onrender.com  # update to your domain
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://teamledger.onrender.com
+      - key: DEFAULT_TIMEZONE
+        value: UTC

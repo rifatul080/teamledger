@@ -37,3 +37,7 @@ This file records reasonable choices the engineer made when the spec left someth
 - Project lives at `teamledger` (lowercase). If the name is taken on GitHub the agent uses `teamledger-app` (also documented in this file).
 - Conventional commits (`feat:`, `fix:`, `test:`, `docs:`, `chore:`). Subject line ≤ 72 chars.
 - No force-pushes, no history rewrites after first push.
+
+## v2 (Phase 6+)
+Same backend serves the SPA + static assets. Resend for mail. Neon for Postgres. Render free web service for backend. Signup rate limit per-IP and per-email.
+Things not done in this run: live URL (requires Render+Neon accounts), live email (requires Resend API key), domain purchase. Manual steps in the final report.

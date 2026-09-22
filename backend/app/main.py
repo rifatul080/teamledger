@@ -6,6 +6,7 @@ import time
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -159,6 +160,39 @@ def create_app() -> FastAPI:
         return {"now": SystemClock().now().isoformat()}
 
     app.include_router(api_v1_router)
+
+    # ----- SPA static fallback -----
+    # If a built SPA exists at ./static (the docker path), serve it from here.
+    # Anything not under /api/ falls through to the SPA's index.html so React
+    # Router owns the URL space on the frontend.
+    static_dir = (Path(__file__).parent.parent / "static").resolve()
+    if static_dir.exists() and (static_dir / "index.html").exists():
+        from starlette.staticfiles import StaticFiles
+
+        app.mount(
+            "/assets",
+            StaticFiles(directory=str(static_dir / "assets")),
+            name="spa-assets",
+        )
+
+        from starlette.responses import FileResponse
+
+        @app.get("/", include_in_schema=False)
+        async def spa_index():
+            return FileResponse(static_dir / "index.html")
+
+        @app.get("/{full_path:path}", include_in_schema=False)
+        async def spa_spa_catch(full_path: str):
+            # Don't shadow real API routes or static assets.
+            if full_path.startswith("api/") or full_path.startswith("assets/"):
+                return JSONResponse({"error": "not found"}, status_code=404)
+            file_path = static_dir / full_path
+            if file_path.is_file():
+                return FileResponse(file_path)
+            return FileResponse(static_dir / "index.html")
+    else:
+        # Dev mode — the SPA is served by Vite (which proxies /api to this app).
+        pass
 
     @app.get("/robots.txt", include_in_schema=False)
     async def robots_txt():
