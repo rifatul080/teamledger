@@ -19,3 +19,10 @@ class User(Base, TimestampMixin):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     last_login_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
+    # v2 — email verification, avatars, theme, institution.
+    email_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    avatar_small: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    avatar_large: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    theme: Mapped[str] = mapped_column(String(8), nullable=False, default="light")
+    institution: Mapped[str | None] = mapped_column(String(255), nullable=True)

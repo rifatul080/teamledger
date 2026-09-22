@@ -162,3 +162,106 @@ async def deliver(db: Session, user: User, *, req: NotifRequest, mail_enabled: b
     from ..core.config import get_settings  # local import
 
     await maybe_send_email(req, user_email=(user.email if mail_enabled else None), from_addr=get_settings().mail_from)
+
+
+# ---------------------------------------------------------------------------
+# v2 — direct transactional email senders for verification + password reset.
+# Real mailers (Resend, SES, SMTP) plug in via `MAIL_BACKEND`.
+
+import logging as _log
+_log = _log.getLogger("teamledger.mail")
+
+PUBLIC_BASE_URL = ""  # set per call from settings when needed
+
+
+def send_verification_email(*, to: str, token: str, settings) -> dict:
+    """Send an email verification link.
+
+    The link is {settings.public_base_url}/verify-email?token=<token>.
+    For Resend we POST to the API; for the console mailer we just log.
+    """
+    link = f"{settings.public_base_url.rstrip('/')}/verify-email?token={token}"
+    subject = "Verify your TeamLedger email"
+    body = (
+        "Welcome to TeamLedger.\n\n"
+        f"Confirm your email by opening this link (valid 24 hours):\n\n  {link}\n\n"
+        "If you did not sign up, you can ignore this email."
+    )
+    return _send(to=to, subject=subject, body=body, settings=settings, kind="verify")
+
+
+def send_password_reset_email(*, to: str, token: str, settings) -> dict:
+    link = f"{settings.public_base_url.rstrip('/')}/login?reset_token={token}"
+    subject = "Reset your TeamLedger password"
+    body = (
+        "Someone (hopefully you) asked to reset the TeamLedger password for this email.\n\n"
+        f"Open this link to set a new password:\n\n  {link}\n\n"
+        "If you didn't ask, you can ignore this email."
+    )
+    return _send(to=to, subject=subject, body=body, settings=settings, kind="reset")
+
+
+def _send(*, to: str, subject: str, body: str, settings, kind: str) -> dict:
+    """Pluggable backend switch."""
+    backend = settings.mail_backend
+    if backend == "console":
+        _log.info("EMAIL(%s) to=%s subject=%r", kind, to, subject)
+        print(f"=== EMAIL ({kind}) ===\nTo: {to}\nSubject: {subject}\n\n{body}\n=== END EMAIL ===")
+        return {"status": "console", "to": to}
+    if backend == "smtp":
+        return _send_smtp(to=to, subject=subject, body=body, settings=settings)
+    if backend == "resend":
+        return _send_resend(to=to, subject=subject, body=body, settings=settings)
+    _log.warning("Unknown mail backend %r; falling back to console", backend)
+    return {"status": "console-fallback", "to": to}
+
+
+def _send_resend(*, to: str, subject: str, body: str, settings) -> dict:
+    """Send via the Resend HTTPS API (api.resend.com). Free tier: 100 emails/day
+    and 3,000/month — plenty for low-volume verification traffic."""
+    if not getattr(settings, "resend_api_key", ""):
+        _log.warning("Resend API key not set; falling back to console")
+        print(f"=== EMAIL (resend-no-key-fallback) ===\nTo: {to}\nSubject: {subject}\n\n{body}\n=== END EMAIL ===")
+        return {"status": "console-fallback", "to": to}
+    try:
+        import json as _json
+        import urllib.request as _u
+        req = _u.Request(
+            "https://api.resend.com/emails",
+            data=_json.dumps(
+                {
+                    "from": getattr(settings, "resend_from", "TeamLedger <noreply@teamledger.app>"),
+                    "to": [to],
+                    "subject": subject,
+                    "text": body,
+                }
+            ).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {settings.resend_api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with _u.urlopen(req, timeout=10) as r:
+            return {"status": "ok", "provider": "resend", "code": r.status}
+    except Exception as e:  # noqa: BLE001
+        _log.exception("Resend send failed: %s", e)
+        return {"status": "error", "provider": "resend", "error": str(e)}
+
+
+def _send_smtp(*, to: str, subject: str, body: str, settings) -> dict:
+    try:
+        import smtplib
+        from email.message import EmailMessage as _EM
+
+        msg = _EM()
+        msg["Subject"] = subject
+        msg["From"] = settings.mail_from
+        msg["To"] = to
+        msg.set_content(body)
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10) as s:
+            s.send_message(msg)
+        return {"status": "ok", "provider": "smtp"}
+    except Exception as e:  # noqa: BLE001
+        _log.exception("SMTP send failed: %s", e)
+        return {"status": "error", "provider": "smtp", "error": str(e)}

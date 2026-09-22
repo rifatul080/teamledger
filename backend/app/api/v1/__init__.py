@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-# Endpoint modules (filled in Phase 2)
 from . import (
+    activity,
     audit,
     auth,
     chat,
@@ -16,6 +16,7 @@ from . import (
     projects,
     schedules,
     scoring,
+    search,
     tasks,
     teams,
     users,
@@ -23,7 +24,6 @@ from . import (
 
 api_v1_router = APIRouter(prefix="/api/v1")
 
-# Mount routers (each module exposes ``router``)
 for mod in (
     auth,
     users,
@@ -39,6 +39,8 @@ for mod in (
     files,
     scoring,
     audit,
+    activity,
+    search,
 ):
     if hasattr(mod, "router"):
         api_v1_router.include_router(mod.router)

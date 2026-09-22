@@ -2,6 +2,7 @@
 from .audit import AuditEvent  # noqa: F401
 from .author_order import AuthorOrderPosition, AuthorOrderSnapshot  # noqa: F401
 from .credit import CategoryMultiplier, CRediTCategory  # noqa: F401
+from .email_verification import EmailVerificationToken  # noqa: F401
 from .file import FileEntry, FileVersion  # noqa: F401
 from .goal import Goal  # noqa: F401
 from .invitation import Invitation  # noqa: F401

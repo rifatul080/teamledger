@@ -17,3 +17,7 @@ class Team(Base, TimestampMixin):
     description: Mapped[str | None] = mapped_column(String(500), nullable=True)
     archived: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     archived_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
+    # v2 — onboarding: what the team is for + the preset it started from.
+    work_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    category_preset: Mapped[str | None] = mapped_column(String(32), nullable=True)

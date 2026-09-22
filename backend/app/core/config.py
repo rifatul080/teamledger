@@ -24,6 +24,14 @@ class Settings(BaseSettings):
     invite_ttl_days: int = 7
     login_rate_limit_per_min: int = 10
     reset_rate_limit_per_min: int = 5
+    signup_rate_limit_per_min: int = 5
+
+    # v2 — real email provider (Resend by default; falls back to console).
+    resend_api_key: str = ""
+    resend_from: str = "TeamLedger <noreply@teamledger.app>"
+    # Avatar storage location (sibling of file storage root by default).
+    avatar_local_root: str = "./storage/avatars"
+    avatar_max_bytes: int = 4 * 1024 * 1024  # 4 MiB cap
 
     storage_backend: Literal["local"] = "local"
     storage_local_root: str = "./storage/files"
@@ -31,7 +39,7 @@ class Settings(BaseSettings):
 
     cors_allowed_origins: str = "http://localhost:5173"
 
-    mail_backend: Literal["console", "smtp"] = "console"
+    mail_backend: Literal["console", "smtp", "resend"] = "console"
     mail_from: str = "teamledger@example.org"
     smtp_host: str = "maildev"
     smtp_port: int = 1025
@@ -39,6 +47,9 @@ class Settings(BaseSettings):
     ws_heartbeat_seconds: int = 25
 
     default_timezone: str = "UTC"
+
+    # Public URL the mailer uses to build verification / reset links.
+    public_base_url: str = "http://localhost:5173"
 
     @property
     def cors_origins(self) -> list[str]:

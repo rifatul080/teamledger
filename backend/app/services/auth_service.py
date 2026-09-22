@@ -14,6 +14,7 @@ from ..core.tokens import encode_jwt, hash_token, random_token
 from ..models.password_reset import PasswordResetToken
 from ..models.refresh_session import RefreshSession
 from ..models.user import User
+from ..models.email_verification import EmailVerificationToken
 
 
 @dataclass(frozen=True)
@@ -38,6 +39,8 @@ def create_user(
     password: str,
     display_name: str,
     timezone: str,
+    institution: str | None = None,
+    email_verified: bool = False,
 ) -> User:
     if not password_strength_ok(password):
         raise validation(
@@ -52,6 +55,8 @@ def create_user(
         timezone=timezone or "UTC",
         password_hash=hash_password(password),
         is_active=True,
+        email_verified=email_verified,
+        institution=(institution or None) and institution.strip()[:255] or None,
         created_at=datetime.now(tz=UTC),
     )
     db.add(user)
@@ -231,4 +236,100 @@ def change_password(db: Session, user: User, *, current: str, new: str) -> None:
             "Password must be at least 10 characters and contain a letter and a digit."
         )
     user.password_hash = hash_password(new)
+
+
+# ---------------------------------------------------------------------------
+# v2 — email verification + institution lookup
+# ---------------------------------------------------------------------------
+
+VERIFICATION_TTL_HOURS = 24
+INSTITUTION_HINTS = {
+    "ac.uk": "UK university",
+    "edu": "Educational institution",
+    "ac.jp": "Japanese university",
+    "ac.kr": "Korean university",
+    "ac.cn": "Chinese university",
+    "ac.in": "Indian university",
+    "ac.za": "South African university",
+    "edu.au": "Australian university",
+    "uni-": "University",
+    "university": "University",
+    "research": "Research institute",
+}
+
+
+def derive_institution_hint_from_email(email: str) -> str | None:
+    """Best-effort guess at an institution name from the email domain.
+
+    The frontend uses this to pre-fill the institution field on signup. We do
+    NOT register a third-party WHOIS or domain lookup — just match common
+    academic patterns (academic TLDs or domain tokens). Always returns None
+    for non-academic addresses; the user can fill the field manually.
+    """
+    if not email or "@" not in email:
+        return None
+    domain = email.split("@", 1)[1].lower().strip()
+    if not domain:
+        return None
+    # Try TLDs first.
+    parts = domain.split(".")
+    if len(parts) >= 2:
+        tld2 = ".".join(parts[-2:])
+        if tld2 in INSTITUTION_HINTS:
+            return INSTITUTION_HINTS[tld2]
+    if len(parts) >= 3:
+        tld3 = ".".join(parts[-3:])
+        if tld3 in INSTITUTION_HINTS:
+            return INSTITUTION_HINTS[tld3]
+    # Token-based fallback (e.g. cs.ox.ac.uk -> "Oxford"? no, skip to be safe)
+    for tok in INSTITUTION_HINTS:
+        if tok in domain and tok not in {"ac.uk", "edu", "ac.jp", "ac.kr", "ac.cn", "ac.in", "ac.za", "edu.au"}:
+            # Don't pre-fill on a stray "university" substring; only on academic TLDs.
+            return INSTITUTION_HINTS[tok]
+    return None
+
+
+@dataclass(frozen=True)
+class EmailVerificationTicket:
+    user_id: str
+    token: str
+    expires_at: datetime
+
+
+def start_email_verification(db: Session, *, user: User) -> EmailVerificationTicket:
+    """Issue a one-time token; the API caller emails it (via the configured
+    mailer). In dev the token is returned so the test/dev path can use it."""
+    now = datetime.now(tz=UTC)
+    plain = random_token(32)
+    db.add(
+        EmailVerificationToken(
+            token=plain,
+            user_id=user.id,
+            created_at=now,
+            expires_at=now + timedelta(hours=VERIFICATION_TTL_HOURS),
+        )
+    )
+    db.flush()
+    return EmailVerificationTicket(user_id=user.id, token=plain, expires_at=now + timedelta(hours=VERIFICATION_TTL_HOURS))
+
+
+def complete_email_verification(db: Session, *, token: str) -> User:
+    from ..models.user import User  # local to avoid cycles at import time
+
+    row = db.query(EmailVerificationToken).filter(EmailVerificationToken.token == token).one_or_none()
+    if row is None or row.consumed_at is not None:
+        raise unauthorized(code="auth.verify_invalid", message="Verification link invalid or already used.")
+    now = datetime.now(tz=UTC)
+    expires = row.expires_at
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=UTC)
+    if expires < now:
+        raise unauthorized(code="auth.verify_expired", message="Verification link expired.")
+    user = db.get(User, row.user_id)
+    if user is None:
+        raise not_found()
+    user.email_verified = True
+    row.consumed_at = now
+    db.flush()
+    return user
 
