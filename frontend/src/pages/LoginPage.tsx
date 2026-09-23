@@ -1,12 +1,16 @@
 import { FormEvent, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useLogin } from "../app/auth";
+import { useAcceptInvite } from "../app/data";
 import { pushToast } from "../components/ui/Toast";
 
 export default function LoginPage() {
+  const [params] = useSearchParams();
+  const nextPath = params.get("next") ?? "/dashboard";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const login = useLogin();
+  const acceptInvite = useAcceptInvite();
   const nav = useNavigate();
   const [submitting, setSubmitting] = useState(false);
 
@@ -15,7 +19,24 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       await login.mutateAsync({ email, password });
-      nav("/dashboard");
+      // If the user came in via an invite link, accept it now.
+      let pendingToken: string | null = null;
+      try {
+        pendingToken = localStorage.getItem("pending_invite_token");
+        if (pendingToken) localStorage.removeItem("pending_invite_token");
+      } catch {
+        /* ignore */
+      }
+      if (pendingToken) {
+        try {
+          const r = await acceptInvite.mutateAsync(pendingToken);
+          nav(`/teams/${r.team_id}`);
+          return;
+        } catch {
+          /* fall through */
+        }
+      }
+      nav(nextPath);
     } catch (err) {
       const msg = (err as { message?: string }).message ?? "Sign-in failed.";
       pushToast({ kind: "error", title: "Sign in failed", body: msg });

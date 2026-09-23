@@ -44,3 +44,17 @@ class InvitationRead(ORMModel):
 
 class TransferLeader(ORMModel):
     new_leader_user_id: str
+
+
+class AddMemberBody(ORMModel):
+    """Body for POST /teams/{id}/members — add an existing user by email."""
+
+    email: EmailStr
+
+
+class MemberRead(ORMModel):
+    user_id: str
+    email: EmailStr
+    display_name: str
+    role: str
+    avatar_url: str | None = None

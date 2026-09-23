@@ -11,6 +11,7 @@ from ...models.team import Team
 from ...models.user import User
 from ...realtime.hub import hub
 from ...schemas.teams import (
+    AddMemberBody,
     InvitationCreate,
     InvitationRead,
     TeamCreate,
@@ -230,6 +231,49 @@ def revoke_invitation(
     db.commit()
 
 
+
+@router.post(
+    "/{team_id}/invite-link",
+    response_model=dict,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_invite_link(
+    team_id: str = Path(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict:
+    """Discord-style: leader generates a shareable URL.
+
+    Anyone with the URL can join the team. No email is sent — the leader
+    shares the URL manually. The token is returned once; the leader should
+    treat it like a password.
+    """
+    from ...core.config import get_settings
+
+    require_role(team_id, db, user.id, role="leader")
+    team = team_service.get_team(db, team_id)
+    _check_not_archived(team)
+    inv = team_service.create_link_invitation(db, team=team, invited_by=user)
+    audit(
+        db,
+        actor_user_id=user.id,
+        team_id=team.id,
+        action="invitation.create",
+        subject_kind="invitation",
+        subject_id=inv.id,
+        payload={"kind": "link", "universal": True},
+    )
+    db.commit()
+    base = get_settings().public_base_url.rstrip("/")
+    return {
+        "id": inv.id,
+        "token": inv.token,
+        "url": f"{base}/accept-invite?token={inv.token}",
+        "expires_at": inv.expires_at,
+    }
+
+
+
 @router.get("/{team_id}/members", response_model=list[dict])
 def list_members(
     team_id: str = Path(...),
@@ -249,3 +293,52 @@ def list_members(
         }
         for u, m in rows
     ]
+
+@router.post(
+    "/{team_id}/members",
+    response_model=dict,
+    status_code=status.HTTP_201_CREATED,
+)
+def add_member(
+    payload: dict,
+    team_id: str = Path(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict:
+    """Leader adds an existing TeamLedger user to the team by email.
+
+    The user must already have an account — if the email is unknown, this
+    returns 404 with a code the UI surfaces as 'use the invite link instead'.
+    No email is sent.
+    """
+    from ...core.errors import not_found as _not_found
+
+    require_role(team_id, db, user.id, role="leader")
+    team = team_service.get_team(db, team_id)
+    _check_not_archived(team)
+    body = AddMemberBody.model_validate(payload)
+    target = db.query(User).filter(User.email == body.email.lower()).one_or_none()
+    if target is None:
+        raise _not_found(
+            "No TeamLedger account with that email. Use the invite link instead.",
+            code="team.user_unknown",
+        )
+    m = team_service.add_member_direct(
+        db, team=team, added_by=user, target=target
+    )
+    audit(
+        db,
+        actor_user_id=user.id,
+        team_id=team.id,
+        action="team.member_add",
+        subject_kind="user",
+        subject_id=target.id,
+        payload={"role": m.role},
+    )
+    db.commit()
+    return {
+        "user_id": target.id,
+        "email": target.email,
+        "display_name": target.display_name,
+        "role": m.role,
+    }

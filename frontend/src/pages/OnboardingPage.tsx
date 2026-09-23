@@ -70,7 +70,9 @@ export default function OnboardingPage() {
         categories: isFirstTeam ? selectedCats : undefined,
       });
       pushToast({ kind: "ok", title: `Team "${t.name}" created` });
-      nav(`/teams/${t.id}`);
+      // Open the invite UI immediately so the leader can add teammates or
+      // copy a Discord-style invite link without hunting for the button.
+      nav(`/teams/${t.id}?invite=1`);
     } catch (e) {
       pushToast({
         kind: "error",

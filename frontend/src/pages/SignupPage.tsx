@@ -1,10 +1,13 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../app/api";
 import { useSignup } from "../app/auth";
+import { useAcceptInvite } from "../app/data";
 import { pushToast } from "../components/ui/Toast";
 
 export default function SignupPage() {
+  const [params] = useSearchParams();
+  const nextPath = params.get("next") ?? "/dashboard";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -15,6 +18,7 @@ export default function SignupPage() {
   const [institutionHint, setInstitutionHint] = useState<string | null>(null);
   const [hintTouched, setHintTouched] = useState(false);
   const signup = useSignup();
+  const acceptInvite = useAcceptInvite();
   const nav = useNavigate();
   const [submitting, setSubmitting] = useState(false);
 
@@ -55,7 +59,25 @@ export default function SignupPage() {
         title: "Account created",
         body: "Check your inbox (or the dev console) for the verification link.",
       });
-      nav("/dashboard");
+      // If the user came in via an invite link, accept it now and go to
+      // that team instead of the dashboard.
+      let pendingToken: string | null = null;
+      try {
+        pendingToken = localStorage.getItem("pending_invite_token");
+        if (pendingToken) localStorage.removeItem("pending_invite_token");
+      } catch {
+        /* ignore */
+      }
+      if (pendingToken) {
+        try {
+          const r = await acceptInvite.mutateAsync(pendingToken);
+          nav(`/teams/${r.team_id}`);
+          return;
+        } catch {
+          // Fall through to nextPath if the token is now invalid.
+        }
+      }
+      nav(nextPath);
     } catch (err) {
       const msg = (err as { message?: string }).message ?? "Signup failed.";
       pushToast({ kind: "error", title: "Sign-up failed", body: msg });

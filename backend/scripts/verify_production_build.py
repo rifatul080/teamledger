@@ -265,11 +265,25 @@ def print_manual_steps() -> None:
 
 def main() -> int:
     print(f"Repo: {REPO}")
-    build_spa()
-    copy_dist_into_backend()
-    smoke_test()
-    print_manual_steps()
-    return 0
+    static = REPO / "backend" / "static"
+    # Always clean up the temp SPA mount so the test runner doesn't pick
+    # it up and shadow /api routes. Use a try/finally to also clean up on
+    # failure.
+    had_static = static.exists()
+    if had_static:
+        # Stale folder from a previous failed run — remove it first.
+        shutil.rmtree(static, ignore_errors=True)
+    try:
+        build_spa()
+        copy_dist_into_backend()
+        smoke_test()
+        print_manual_steps()
+        return 0
+    finally:
+        # Don't leave backend/static/ behind — it would let the SPA fallback
+        # mount at next pytest run, which is unrelated to API tests.
+        shutil.rmtree(static, ignore_errors=True)
+        print(f"\nCleaned up {static}")
 
 
 if __name__ == "__main__":

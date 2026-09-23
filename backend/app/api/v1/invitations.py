@@ -28,3 +28,18 @@ def accept(
     )
     db.commit()
     return {"team_id": m.team_id, "role": m.role}
+
+
+@router.get("/{token}", status_code=200)
+def get_invitation(
+    token: str,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Public preview of an invite token — shows team name + expiry.
+
+    Never returns member lists, the inviter's email, or any PII. Used by
+    the /accept-invite landing page so non-users see 'you're invited to
+    join X' before deciding to sign up.
+    """
+    return team_service.public_invitation_view(db, token)
+

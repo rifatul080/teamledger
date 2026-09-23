@@ -284,10 +284,59 @@ export function useInviteMember(teamId: string) {
   });
 }
 
+export function useAddMemberDirect(teamId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { email: string }) =>
+      api<{ user_id: string; email: string; display_name: string; role: string }>(
+        `/teams/${teamId}/members`,
+        { method: "POST", json: body },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["team-members", teamId] });
+      qc.invalidateQueries({ queryKey: ["team", teamId] });
+    },
+  });
+}
+
+export function useCreateInviteLink(teamId: string) {
+  return useMutation({
+    mutationFn: () =>
+      api<{ id: string; token: string; url: string; expires_at: string }>(
+        `/teams/${teamId}/invite-link`,
+        { method: "POST" },
+      ),
+  });
+}
+
 export function useAcceptInvite() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (token: string) =>
-      api(`/invitations/${token}/accept`, { method: "POST" }),
+      api<{ team_id: string; role: string }>(
+        `/invitations/${token}/accept`,
+        { method: "POST" },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["teams"] });
+    },
+  });
+}
+
+export function useInvitationPreview(token: string | undefined) {
+  return useQuery({
+    queryKey: ["invitation-preview", token],
+    enabled: Boolean(token),
+    queryFn: () =>
+      api<{
+        token: string;
+        team_id: string;
+        team_name: string;
+        team_description: string | null;
+        expires_at: string;
+        kind: string;
+      }>(`/invitations/${token}`),
+    retry: false,
   });
 }
 

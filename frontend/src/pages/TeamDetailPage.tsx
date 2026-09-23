@@ -1,14 +1,14 @@
-import { Link, useParams } from "react-router-dom";
-import { useTeam, useTeamMembers, useTeamProjects } from "../app/data";
+import { Link, useParams, useSearchParams } from "react-router-dom";
+import { useTeam, useTeamProjects } from "../app/data";
 import { useActivity } from "../app/notifications";
-import { Avatar } from "../components/ui/Avatar";
 import { EmptyState } from "../components/ui/EmptyState";
+import { MembersPanel } from "../components/team/MembersPanel";
 
 export default function TeamDetailPage() {
   const { teamId } = useParams();
+  const [searchParams] = useSearchParams();
   const team = useTeam(teamId);
   const projects = useTeamProjects(teamId);
-  const members = useTeamMembers(teamId);
   const activity = useActivity(teamId);
 
   if (!teamId) return null;
@@ -16,6 +16,7 @@ export default function TeamDetailPage() {
   if (!team.data) return <EmptyState title="Team not found" body="It may have been archived or removed." />;
 
   const t = team.data;
+  const canManage = t.role === "leader";
   return (
     <div className="flex flex-col gap-6">
       <header className="flex items-end justify-between gap-4">
@@ -70,25 +71,9 @@ export default function TeamDetailPage() {
             </ul>
           )}
         </section>
-
         <aside className="card">
           <h2 className="text-h2 mb-3">Members</h2>
-          <ul className="flex flex-col gap-2">
-            {(members.data ?? []).map((m) => (
-              <li key={m.user_id} className="flex items-center gap-2">
-                <Avatar
-                  userId={m.user_id}
-                  displayName={m.display_name}
-                  src={m.avatar_url ?? null}
-                  size="sm"
-                />
-                <div className="min-w-0">
-                  <div className="text-sm truncate">{m.display_name}</div>
-                  <div className="text-faint truncate">{m.role}</div>
-                </div>
-              </li>
-            ))}
-          </ul>
+          <MembersPanel teamId={teamId} canManage={canManage} autoOpenInvite={searchParams.get("invite") === "1"} />
         </aside>
       </div>
 
