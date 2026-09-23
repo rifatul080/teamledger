@@ -14,6 +14,12 @@ def _png_bytes(w=8, h=8):
     return buf.getvalue()
 
 
+def _jpeg_bytes(w=8, h=8):
+    buf = io.BytesIO()
+    Image.new("RGB", (w, h), (200, 100, 50)).save(buf, format="JPEG")
+    return buf.getvalue()
+
+
 def test_institution_hint_academic_domain(client):
     r = client.get("/api/v1/auth/institution-hint", params={"email": "alice@cs.ox.ac.uk"})
     assert r.status_code == 200
@@ -59,6 +65,16 @@ def test_avatar_upload_and_download(client):
         "image/gif",
         "image/webp",
     )
+
+
+def test_avatar_upload_jpeg(client):
+    """Regression: JPEG bytes used to crash with KeyError: 'JPG' because
+    PIL's format key is 'JPEG', not 'JPG'."""
+    signup(client, "jp@example.org")
+    h = AuthedClient(client, "jp@example.org")
+    files = {"file": ("avatar.jpg", _jpeg_bytes(64, 64), "image/jpeg")}
+    r = h.post("/api/v1/me/avatar", files=files)
+    assert r.status_code == 200, r.text
 
 
 def test_avatar_upload_rejects_non_image_bytes(client):

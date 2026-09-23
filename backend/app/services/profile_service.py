@@ -132,8 +132,16 @@ def validate_and_avatar_from_upload(
     ud = _user_dir(user.id)
     small_path = ud / f"avatar-small.{fmt}"
     large_path = ud / f"avatar-large.{fmt}"
-    small.save(small_path, format=fmt.upper(), optimize=True)
-    large.save(large_path, format=fmt.upper(), optimize=True)
+    # PIL uses 'JPEG' as the format key, not 'JPG'. Map our normalised
+    # extension back to PIL's expected names.
+    pil_format = {"jpg": "JPEG"}.get(fmt, fmt.upper())
+    # JPEG doesn't support alpha. Flatten to white-on-RGB before saving.
+    # PNG, GIF, WebP keep RGBA so transparent avatars stay transparent.
+    if pil_format == "JPEG":
+        small = small.convert("RGB")
+        large = large.convert("RGB")
+    small.save(small_path, format=pil_format, optimize=True)
+    large.save(large_path, format=pil_format, optimize=True)
     for old in ud.glob("avatar-*.??*"):
         if old not in (small_path, large_path):
             try:
