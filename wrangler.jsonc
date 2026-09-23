@@ -1,0 +1,60 @@
+// Cloudflare Containers config for TeamLedger.
+//
+// Requires Cloudflare Workers Paid plan ($5/mo minimum, $0.012/hr per
+// running instance) — not part of the free tier. To deploy from a local
+// machine:
+//
+//   1. Install: npm install -g wrangler
+//   2. Login:   wrangler login
+//   3. Secrets (one at a time):
+//        wrangler secret put DATABASE_URL
+//        wrangler secret put SECRET_KEY
+//        wrangler secret put RESEND_API_KEY
+//   4. Deploy:  wrangler deploy
+//
+// Build context: the repo root. The Dockerfile at backend/Dockerfile is
+// a two-stage build that compiles the SPA and bakes it into /app/static,
+// so the same image serves the API and the React frontend on port 8080.
+//
+// Health: Cloudflare probes /healthz (defined in backend/app/main.py).
+//
+// Free Postgres: pair this with Neon's free tier by setting DATABASE_URL
+// to the Neon connection string. The app auto-detects the postgresql://
+// scheme; no other config is required.
+//
+// Secrets you MUST set (otherwise boot will fail):
+//   DATABASE_URL    Postgres URL, e.g. postgresql://user:pass@ep-xxx.neon.tech/neondb?sslmode=require
+//   SECRET_KEY      Any 32+ byte random string (e.g. python -c "import secrets;print(secrets.token_urlsafe(48))")
+//   RESEND_API_KEY  From https://resend.com/api-keys  (leave blank to use MAIL_BACKEND=console)
+{
+  "name": "teamledger",
+  "compatibility_date": "2025-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "containers": [
+    {
+      "name": "teamledger-api",
+      "class_name": "TeamledgerContainer",
+      "image": "./backend/Dockerfile",
+      "max_instances": 1,
+      "port": 8080,
+      "health": {
+        "type": "http",
+        "path": "/healthz",
+        "interval_seconds": 30,
+        "timeout_seconds": 5
+      },
+      "env": {
+        "APP_ENV": "production",
+        "PORT": "8080",
+        "PUBLIC_BASE_URL": "https://teamledger.<your-subdomain>.workers.dev",
+        "CORS_ALLOWED_ORIGINS": "https://teamledger.<your-subdomain>.workers.dev",
+        "MAIL_BACKEND": "resend",
+        "RESEND_FROM": "TeamLedger <noreply@teamledger.app>",
+        "STORAGE_BACKEND": "local",
+        "STORAGE_LOCAL_ROOT": "/app/storage/files",
+        "AVATAR_LOCAL_ROOT": "/app/storage/avatars"
+      }
+    }
+  ]
+}

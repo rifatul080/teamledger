@@ -18,7 +18,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        build-essential libpq-dev libmagic1 curl ca-certificates \
+        build-essential libpq-dev libmagic1 curl ca-certificates tini \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/pyproject.toml ./
@@ -30,8 +30,24 @@ COPY backend/alembic.ini ./
 COPY backend/scripts ./scripts
 COPY --from=spa /spa/dist /app/static
 
+# Storage directories for the local-disk fallback (avatars, files, backups).
+# On managed Postgres (Neon, etc.) the SQLite DB at /app/storage/ is unused,
+# but we keep the directory so a SQLite-only deploy still works.
 RUN mkdir -p /app/storage/files /app/storage/avatars /app/storage/backups
 
-EXPOSE 8000
+# Run as a non-root user. Cloudflare Containers and most PaaS platforms
+# warn (or refuse) on root containers.
+RUN useradd --create-home --uid 10001 --shell /bin/bash app \
+    && chown -R app:app /app
+USER app
 
-CMD ["bash", "-lc", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers"]
+# Cloudflare Containers defaults to 8080; Render / fly.io typically use 8000.
+# The CMD script reads $PORT and falls back to 8000 when unset.
+ENV PORT=8080
+EXPOSE 8080
+
+# tini reaps zombies and forwards signals so SIGTERM from the orchestrator
+# actually shuts uvicorn down cleanly.
+ENTRYPOINT ["/usr/bin/tini", "--"]
+
+CMD ["bash", "-lc", "alembic upgrade head && exec python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers"]
