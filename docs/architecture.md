@@ -325,3 +325,98 @@ See `docs/scoring-methodology.md` for the formula, settings, and a worked exampl
   ```
 
 Decimals: `Decimal('0.000000')` for points_awarded. Multiplications performed in `Decimal` context with 28-digit precision; final rounding to 6 places with `ROUND_HALF_UP`.
+
+
+## v2 (Phase 6+) additions
+
+### Design system
+
+The frontend visual language is built on a small set of CSS custom
+properties (in `frontend/src/index.css`):
+
+- A near-black / near-white pair for text and background.
+- Three grays for borders, secondary text, and tertiary text.
+- Exactly one accent (indigo) used for primary actions and active states.
+- Semantic status colors (info, warn, danger, ok) are used only when
+  paired with an icon or text label — never color alone.
+
+Dark mode is a class on `<html>` rather than CSS inversion: the tokens
+themselves flip values. The choice is persisted in `localStorage`
+under `tl.theme` and the per-user `theme` column on the User row is the
+source of truth on the server (set via `PATCH /me`).
+
+### Profile pictures and avatars
+
+Uploads hit `POST /me/avatar` as `multipart/form-data`. The server
+validates by magic bytes (PNG, JPEG, WebP, GIF), then re-encodes two
+sizes: 64 px for lists and 256 px for the profile page. The original
+upload is never served. A user without a photo gets a deterministic
+initials badge on a color derived from their user ID hash — the same
+person always gets the same color, never a broken-image icon.
+
+`GET /users/{id}/avatar?size=small|large` serves the bytes. Cache
+headers: `public, max-age=300`.
+
+Removed members' avatars stay attached to historical messages, tasks,
+and contribution records — the same way their name does.
+
+### Email verification + signup rate limit
+
+`POST /auth/signup` is rate-limited per-IP and per-email (default 5/min).
+It issues a one-time email-verification token, mails it via the
+configured mailer (console / SMTP / Resend), and auto-logs the user in.
+`POST /auth/verify-email` consumes the token and marks the user verified.
+`POST /auth/resend-verification` requires auth and re-issues.
+
+The signup endpoint also pre-fills an `institution` field when the
+email's domain matches a recognizable academic pattern
+(`ac.uk`, `edu`, `ac.jp`, `…`).
+
+### Activity feed derived from audit log
+
+There is no parallel "notifications" stream — the existing append-only
+`audit_events` table is the only source. `GET /activity` and
+`GET /teams/{id}/activity` project those rows into typed feed items
+(mention, thread_reply, reaction, task_assigned, task_reviewed,
+milestone, member, system), with `href` deep-links into the app.
+
+`GET /activity/unread-count` and `POST /activity/read` operate on the
+Notification table, which is keyed on (user_id, type, …). The frontend
+polls the unread-count endpoint every 30 s.
+
+### Global search
+
+`GET /search?q=…` searches across messages, task titles, and file
+names, scoped to the caller's current memberships. Results are grouped
+by type on the client (the palette renders a "T / M / F" prefix on each
+hit). The endpoint is auth-only; never exposed publicly.
+
+### Production deploy shape
+
+`backend/Dockerfile` is a multi-stage build:
+
+1. Node stage builds the SPA with `npm run build`.
+2. Python stage installs the backend, copies the built SPA into
+   `/app/static`, and starts uvicorn on port 8000.
+
+The FastAPI app mounts `/assets/` from `static/` and serves
+`index.html` for everything not under `/api/` so React Router owns the
+URL space on the frontend. There is no separate static host.
+
+`render.yaml` documents the env vars and the one-service deploy on
+Render's free web service tier. `backend/.env.example` is the contract
+that needs to match in production.
+
+### Free-tier expectations
+
+- Render free web services sleep after ~15 minutes of inactivity. The
+  next request takes several seconds to wake — this is normal, not a
+  bug.
+- Neon free Postgres scales to zero when idle. The first query after a
+  quiet period takes ~1-2 s longer while the compute warms. The
+  connection string stays valid; do not recreate the database.
+- Avatars and file storage are local to the Render service today and
+  do NOT survive a redeploy that wipes the disk. For a real production
+  install, swap `STORAGE_BACKEND=local` for an S3-compatible backend
+  (the storage layer is already abstracted behind an interface).
+

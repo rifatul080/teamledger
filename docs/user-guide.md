@@ -291,3 +291,128 @@ older snapshots remain queryable for audit purposes.
 | `csrf.required`                          | Add `-H "X-CSRF-Token: $CSRF"` for unsafe verbs.          |
 | `team.archived` (423)                    | Unarchive via DB or recreate the team.                    |
 | `score.adjustment_add` audit row missing | Check that the caller is the team leader.                 |
+
+
+## v2 walkthrough additions
+
+### Public landing page and signup
+
+Open `https://your-app/` (or `http://localhost:5173/` in dev). The
+landing page explains who TeamLedger is for (research teams working on a
+paper, thesis, or grant) and offers a "Create your account" button.
+
+Create an account:
+- Your email — academic domains (e.g. `cs.ox.ac.uk`) are detected and
+  pre-fill the institution field.
+- Your display name — shown next to everything you do; can be changed
+  later from the Profile page.
+- Institution — pre-filled if your email was academic; confirm or edit.
+- Timezone — pre-filled from the browser.
+- Password — at least 10 chars, including a letter and a digit.
+
+After signup you are auto-logged in. A verification link is sent to your
+email (in dev it prints to the backend console); click it or paste the
+URL into your browser to confirm. Resend from the Profile page is fine.
+
+### First-team onboarding wizard
+
+The first time you create a team you see a 5-step wizard:
+
+1. **What is this team working toward?** Choose Conference paper, Journal
+   submission, Thesis / dissertation, Ongoing lab research, or Grant
+   proposal. This drives the default category preset.
+2. **Pick a starting preset.** Each preset pre-selects a sensible subset
+   of CRediT categories with reasonable relative weights (a conference
+   paper preset weights coding and experimentation heavily; a wet-lab
+   research preset weights data collection and methodology heavily).
+   A preset only sets initial values — everything stays editable later.
+3. **Adjust the categories.** Checkboxes for every CRediT category with
+   a numeric weight next to each selected one. Nothing is locked out.
+4. **Name your team.** A few tappable suggestions are shown.
+5. **All set.** Review the summary and create the team.
+
+A pure invitee (someone who only joins existing teams and never creates
+their own) never sees this wizard — they go straight to the dashboard.
+
+### Creating a second team (condensed)
+
+Creating a second or later team skips the wizard:
+1. Team name (with tappable suggestions).
+2. Work type.
+3. Preset choice.
+
+No re-explaining of CRediT categories or re-asking about the account —
+the person already knows the app.
+
+### Command palette
+
+Press `Ctrl+K` (or `Cmd+K` on macOS) anywhere to open the command
+palette. Type to fuzzy-search teams, projects, tasks, or people; arrow
+keys + Enter to navigate. The palette also exposes quick actions (Go to
+dashboard, Go to teams, Create a new team, Toggle light / dark theme,
+Show keyboard shortcuts).
+
+Other shortcuts (also documented inside the palette under "?"):
+- `Esc` closes the current dialog
+- `↑` / `↓` move selection in lists
+- `g` then `d` → dashboard
+- `g` then `t` → teams
+- `g` then `n` → notifications
+
+### Task views
+
+Every project has four task views (Board / List / Calendar / Timeline),
+backed by the same data. Switching views does not duplicate, reorder, or
+lose anything. Per-project defaults are stored on the project; per-user
+overrides (last-used view) are remembered in `localStorage` and override
+the project default for you specifically.
+
+### Drag-and-drop on the board
+
+Click and drag a task card between columns to change its status
+immediately. The change is sent to the server in the background; if the
+server rejects it, you'll see a toast and the card snaps back.
+
+### Profile pictures
+
+Open the Profile page and click "Change photo". Pick an image — the
+client crops it to a square, the server re-encodes two sizes
+(64 px for lists, 256 px for the profile page), strips the EXIF, and
+validates the file by its content, not its extension. A user without a
+photo gets a deterministic initials badge on a color derived from their
+user ID — the same person always gets the same color.
+
+### Contribution scoring (preview)
+
+The "Scoring" tab on a paper project is where evidence-based author
+order comes together. There are four pieces in this build:
+- Evidence trail: every point links back to the source task, file, or
+  milestone that generated it.
+- Author-order simulator: adjust the relative weight per CRediT
+  category and watch the author order recompute live. Nothing is
+  written to the permanent record until you confirm a weighting.
+- Dispute workflow: while the contribution record is still open, any
+  member can flag a scored item with a short reason. The leader must
+  record a response — adjust the score or explain why it stands —
+  before the item can be finalised.
+- Finalization: an explicit "Finalize contribution record" action locks
+  the scores and author order from silent edits. Subsequent changes
+  become a new dated revision rather than an edit-in-place.
+
+The CRediT statement export and anti-gaming flags, plus the
+cross-team workload warning shown when assigning a deadline, are wired
+into the same project page; details are in `docs/scoring-methodology.md`.
+
+### Activity / notifications
+
+Mentions, thread replies directed at you, and reactions on your messages
+share a single activity view at `/notifications`. Filter by kind using
+the tabs. "Mark all read" clears everything. Per-team feeds at
+`/teams/{id}` also show all activity filtered to that team.
+
+### Public search (command palette)
+
+Press `Ctrl+K` and type any phrase. The palette pulls together matches
+across messages, task titles, and file names — all in one box, grouped
+by type.
+
