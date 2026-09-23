@@ -47,14 +47,30 @@ _ACTIVITY_KIND: dict[str, tuple[str, str, str]] = {
 
 def _project(user: User, events: list[AuditEvent]) -> list[dict]:
     """Map audit events to activity items for the home/team feed."""
+    import json as _json
+
     out = []
     for ev in events:
         kind, body_tmpl, href_tmpl = _ACTIVITY_KIND.get(
             ev.action, ("system", ev.action.replace(".", " "), "/dashboard")
         )
-        payload = ev.payload or {}
+        # payload may be a JSON string (legacy rows) or already a dict.
+        if isinstance(ev.payload, str):
+            try:
+                payload = _json.loads(ev.payload) if ev.payload else {}
+            except Exception:
+                payload = {}
+        elif ev.payload is None:
+            payload = {}
+        else:
+            payload = dict(ev.payload)
         try:
-            title = payload.get("title") or payload.get("display_name") or payload.get("email") or ""
+            title = (
+                payload.get("title")
+                or payload.get("display_name")
+                or payload.get("email")
+                or ""
+            )
             body = body_tmpl.format(
                 title=title,
                 email=payload.get("email", payload.get("removed_email", "")),
@@ -83,8 +99,6 @@ def _project(user: User, events: list[AuditEvent]) -> list[dict]:
                 "actor_user_id": ev.actor_user_id,
                 "body": body,
                 "href": href,
-                # 'read' is tracked separately per user; we treat all as unread
-                # at first; the /activity/read endpoint marks Notification rows.
                 "read": False,
                 "created_at": ev.at.isoformat() if ev.at else datetime.now(tz=UTC).isoformat(),
             }

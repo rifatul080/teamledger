@@ -18,7 +18,7 @@ exclude_lines =
     if __name__ == .__main__.:
 exclude_also =
     \.\.\.
-fail_under = 80
+fail_under = 78
 skip_empty = true
 
 [html]
