@@ -35,6 +35,8 @@ test-results/
 # Build output
 backend/static/
 frontend/dist/
+frontend/tsconfig.tsbuildinfo
+backend/tsconfig.tsbuildinfo
 
 # Storage
 storage/
