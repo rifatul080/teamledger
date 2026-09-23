@@ -64,6 +64,7 @@
       "name": "teamledger-api",
       "class_name": "TeamledgerContainer",
       "image": "./backend/Dockerfile",
+      "image_build_context": "./",
       "max_instances": 1,
       "instance_type": "basic"
     }

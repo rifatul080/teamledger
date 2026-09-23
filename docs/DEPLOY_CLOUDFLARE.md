@@ -131,6 +131,7 @@ Sign up with a real email; the verification mail goes through Resend.
 | Email never arrives | `RESEND_FROM` must be a domain you've verified in Resend, or use the sandbox `onboarding@resend.dev` |
 | `Unexpected fields found in containers field: "port","health","env"` | You're using an old `wrangler.jsonc`. The current schema puts `defaultPort` in the Container class, not in the config. Pull the latest. |
 | `Missing entry-point to Worker script or to assets directory` | The config is missing `main`. The current config has `"main": "src/worker.ts"`. Pull the latest. |
+| `failed to calculate checksum of ref ... /backend/alembic: not found` | Wrangler defaults the Docker build context to the directory containing `image` (here `./backend/`). The Dockerfile uses repo-root-relative paths (`COPY frontend ./`, `COPY backend/app ./app`), so set `"image_build_context": "./"` (repo root) inside the `containers[]` entry. |
 | Container won't start: `Cannot connect to the Docker daemon` | Start Docker Desktop, then re-run `wrangler deploy`. |
 
 ## What you don't need to configure
