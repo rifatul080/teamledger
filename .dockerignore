@@ -1,6 +1,7 @@
 # Exclude from Docker build context (anything that would slow the
-# COPY in the Dockerfile). The Dockerfile itself only COPYs what it
-# needs; this file speeds the build by skipping upload of the rest.
+# COPY in the Dockerfile). This file speeds the build by skipping upload
+# of the rest. The build context is the repository root (wrangler runs
+# `docker build` from the directory containing wrangler.jsonc).
 
 # Node / frontend
 frontend/node_modules
@@ -8,6 +9,14 @@ frontend/dist
 frontend/.vite
 frontend/coverage
 frontend/tsconfig.tsbuildinfo
+
+# Cloudflare Worker (used by wrangler, not by the backend Dockerfile)
+src
+node_modules
+package.json
+package-lock.json
+tsconfig.json
+wrangler.jsonc
 
 # Python / backend
 backend/__pycache__
