@@ -33,7 +33,11 @@ backend/.tox
 backend/**.pyc
 backend/**.pyo
 backend/**.egg-info
-backend/storage
+# Exclude the local-disk storage dir at the repo level (avatars, files,
+# backups). The Python package at backend/app/storage/ is NOT excluded — it
+# has a different path. The pattern below is path-anchored and won't match
+# backend/app/storage.
+backend/storage/**
 backend/static
 backend/*.db
 backend/*.sqlite
