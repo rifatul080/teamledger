@@ -11,8 +11,6 @@
 # ---- Stage 1: build the SPA ----
 FROM node:20-alpine AS spa
 WORKDIR /spa
-# Frontend lives at ../frontend relative to the ./backend build context.
-# BuildKit allows parent-directory references for COPY, so this works.
 COPY ../frontend/package.json ../frontend/package-lock.json* ./
 # npm ci fails without lockfile; use npm install when absent (dev installs).
 RUN npm install --no-audit --no-fund
@@ -33,10 +31,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential libpq-dev libmagic1 curl ca-certificates tini \
     && rm -rf /var/lib/apt/lists/*
 
-# The backend tree is the build context (./backend) itself. Copy it into
-# /app/_backend_src and pip-install it editable so the
-# `teamledger-backend` package is importable.
-COPY . /app/_backend_src/
+# Stage the backend tree at /app/_backend_src so the editable install
+# finds pyproject.toml and the package layout. Build context is ./backend
+# (Railway's Root Directory), so each path is a direct child of the
+# context root — except pyproject.toml which lives at the context root
+# itself.
+COPY ./pyproject.toml /app/_backend_src/pyproject.toml
+COPY ./app /app/_backend_src/app
+COPY ./alembic /app/_backend_src/alembic
+COPY ./alembic.ini /app/_backend_src/alembic.ini
+COPY ./scripts /app/_backend_src/scripts
 
 RUN pip install --upgrade pip && pip install -e "/app/_backend_src[api]"
 

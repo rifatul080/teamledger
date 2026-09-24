@@ -5,11 +5,6 @@
 #
 # For Railway / Render / Fly / etc. the root-level Dockerfile handles the
 # build instead, and adapts to its build context.
-#
-# Note on Docker COPY semantics: paths in COPY are resolved relative to
-# the build context root, NOT to the Dockerfile's directory. So even
-# though this Dockerfile lives in backend/, `COPY backend ./` works
-# (because the build context is the repo root and `./backend` exists).
 
 # ---- Stage 1: build the SPA ----
 FROM node:20-alpine AS spa
@@ -35,9 +30,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Stage the backend tree at /app/_backend_src so the editable install
-# finds pyproject.toml and the package layout. COPY paths are
-# repo-root-relative (build context is ./).
-COPY backend /app/_backend_src/
+# finds pyproject.toml and the package layout. Build context is the repo
+# root, so each path is a direct child of the context.
+COPY backend/pyproject.toml /app/_backend_src/pyproject.toml
+COPY backend/app /app/_backend_src/app
+COPY backend/alembic /app/_backend_src/alembic
+COPY backend/alembic.ini /app/_backend_src/alembic.ini
+COPY backend/scripts /app/_backend_src/scripts
 
 RUN pip install --upgrade pip && pip install -e "/app/_backend_src[api]"
 
