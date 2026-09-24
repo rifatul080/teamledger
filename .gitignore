@@ -38,14 +38,22 @@ frontend/dist/
 frontend/tsconfig.tsbuildinfo
 backend/tsconfig.tsbuildinfo
 
-# Storage
-storage/
+# Storage — only the top-level runtime data dirs. The Python package at
+# backend/app/storage/ is NOT excluded (it's source code, not data).
+# Without the leading slash, git's pattern `storage/` matches at any depth
+# — including backend/app/storage/, which would silently exclude the package
+# from the repo and break production builds.
+/storage/
+backend/storage/
 data/
 *.sqlite
 *.sqlite3
 *.db
 *.dump
 *.sql.gz
+# Keep the Python storage package tracked even though it lives under a
+# matching name (parent dir pattern can still bleed through in some flows).
+!backend/app/storage/
 
 # IDE
 .idea/
