@@ -41,6 +41,12 @@ COPY backend/alembic /app/_backend_src/alembic
 COPY backend/alembic.ini /app/_backend_src/alembic.ini
 COPY backend/scripts /app/_backend_src/scripts
 
+# Also copy alembic.ini and the alembic/ migrations dir to /app so alembic
+# finds them when invoked from /app (the WORKDIR). The originals stay
+# in /app/_backend_src for the editable install.
+COPY backend/alembic.ini /app/alembic.ini
+COPY backend/alembic /app/alembic
+
 RUN pip install --upgrade pip && pip install -e "/app/_backend_src[api]"
 
 # Mirror the Python sources to /app/app so the entrypoint command
@@ -63,4 +69,4 @@ EXPOSE 8080
 ENTRYPOINT ["/usr/bin/tini", "--"]
 
 # Honour $PORT. Run migrations on every boot.
-CMD ["bash", "-lc", "export PYTHONPATH=/app/_backend_src && alembic upgrade head && exec python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers"]
+CMD ["bash", "-lc", "alembic upgrade head && exec python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers"]
