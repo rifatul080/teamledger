@@ -24,6 +24,8 @@ if config.config_file_name is not None:
 # Inject URL from settings if available
 settings = get_settings()
 if settings.database_url:
+    # Settings.normalise_database_url has already rewritten a bare
+    # postgresql:// URL to use the psycopg v3 driver.
     config.set_main_option("sqlalchemy.url", settings.database_url)
 
 target_metadata = Base.metadata

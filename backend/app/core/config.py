@@ -4,8 +4,23 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _normalize_database_url(url: str) -> str:
+    """Rewrite bare ``postgresql://`` URLs to use the psycopg v3 driver.
+
+    SQLAlchemy defaults to psycopg2 when the URL has no driver prefix. We
+    ship both psycopg v3 and psycopg2-binary; prefer v3 when the caller
+    didn't specify a driver, so a bare ``postgresql://...`` from Railway,
+    Neon, Render, etc. works without thinking about prefixes.
+    """
+    if url.startswith("postgresql://"):
+        return "postgresql+psycopg://" + url[len("postgresql://"):]
+    if url.startswith("postgres://"):
+        return "postgresql+psycopg://" + url[len("postgres://"):]
+    return url
 
 
 class Settings(BaseSettings):
@@ -16,6 +31,11 @@ class Settings(BaseSettings):
     app_env: Literal["development", "test", "production"] = Field(default="development")
     secret_key: str = Field(default="dev-secret-change-me")
     database_url: str = Field(default="sqlite:///./storage/teamledger.db")
+
+    @field_validator("database_url")
+    @classmethod
+    def _normalize_url(cls, value: str) -> str:
+        return _normalize_database_url(value)
     redis_url: str = Field(default="redis://localhost:6379/0")
 
     access_token_ttl_min: int = 30
