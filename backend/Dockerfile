@@ -1,10 +1,16 @@
+# backend/Dockerfile — used by Cloudflare Containers with
+# image_build_context: "./" in wrangler.jsonc (build context = repo root).
+#
+# For Railway / Render / Fly / etc. the root-level Dockerfile handles the
+# build instead, and adapts to its build context.
+
 # ---- Stage 1: build the SPA ----
 FROM node:20-alpine AS spa
 WORKDIR /spa
-COPY frontend/package.json frontend/package-lock.json* ./
+COPY ../frontend/package.json ../frontend/package-lock.json* ./
 # npm ci fails without lockfile; use npm install when absent (dev installs).
 RUN npm install --no-audit --no-fund
-COPY frontend ./
+COPY ../frontend ./
 RUN npm run build
 
 # ---- Stage 2: backend + serve SPA ----
@@ -21,33 +27,32 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential libpq-dev libmagic1 curl ca-certificates tini \
     && rm -rf /var/lib/apt/lists/*
 
-COPY backend/pyproject.toml ./
-RUN pip install --upgrade pip && pip install -e ".[api]"
+COPY ./pyproject.toml /app/_backend_src_pyproject.toml
+COPY ./alembic /app/_backend_src_alembic
+COPY ./app /app/_backend_src_app
 
-COPY backend/app ./app
-COPY backend/alembic ./alembic
-COPY backend/alembic.ini ./
-COPY backend/scripts ./scripts
+# Reassemble the backend tree at /app/_backend_src so the editable install
+# sees pyproject.toml and the package layout.
+RUN mkdir -p /app/_backend_src && \
+    mv /app/_backend_src_pyproject.toml /app/_backend_src/pyproject.toml && \
+    cp -r /app/_backend_src_alembic /app/_backend_src/alembic && \
+    cp -r /app/_backend_src_app /app/_backend_src/app
+
+RUN pip install --upgrade pip && pip install -e "/app/_backend_src[api]"
+
 COPY --from=spa /spa/dist /app/static
 
-# Storage directories for the local-disk fallback (avatars, files, backups).
-# On managed Postgres (Neon, etc.) the SQLite DB at /app/storage/ is unused,
-# but we keep the directory so a SQLite-only deploy still works.
+# Storage directories for the local-disk fallback.
 RUN mkdir -p /app/storage/files /app/storage/avatars /app/storage/backups
 
-# Run as a non-root user. Cloudflare Containers and most PaaS platforms
-# warn (or refuse) on root containers.
+# Run as a non-root user.
 RUN useradd --create-home --uid 10001 --shell /bin/bash app \
-    && chown -R app:app /app
+    && chown -R app:app /app /app/_backend_src
 USER app
 
-# Cloudflare Containers defaults to 8080; Render / fly.io typically use 8000.
-# The CMD script reads $PORT and falls back to 8000 when unset.
 ENV PORT=8080
 EXPOSE 8080
 
-# tini reaps zombies and forwards signals so SIGTERM from the orchestrator
-# actually shuts uvicorn down cleanly.
 ENTRYPOINT ["/usr/bin/tini", "--"]
 
-CMD ["bash", "-lc", "alembic upgrade head && exec python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers"]
+CMD ["bash", "-lc", "export PYTHONPATH=/app/_backend_src && alembic upgrade head && exec python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers"]
