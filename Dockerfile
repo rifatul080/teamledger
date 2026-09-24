@@ -1,11 +1,20 @@
 # Root-level Dockerfile for Railway / Fly.io / Koyeb / any platform that
 # auto-detects a Dockerfile at the repo root.
 #
-# Build context = repo root. All COPY paths are repo-root-relative.
-# For Cloudflare Containers, wrangler uses backend/Dockerfile directly
-# with image_build_context: "./", so this file is irrelevant there.
+# Build context: REPOSITORY ROOT.
 #
-# Layout (kept simple on purpose):
+# IMPORTANT for Railway: this Dockerfile expects the build context to be
+# the repo root (so it can `COPY backend/...` and `COPY frontend/...`).
+# If your Railway service's "Root Directory" is set to ./backend, the
+# build context becomes backend/ instead and this file will fail with
+# errors like "/backend/app/__init__.py": not found. Set the service's
+# Root Directory to "" (empty) or "." on Railway so the full repo is
+# sent as the build context.
+#
+# backend/Dockerfile is the alternative for platforms that insist on a
+# ./backend context (Cloudflare Containers with image_build_context: "./").
+#
+# Final layout:
 #   /app/pyproject.toml       <- editable install target
 #   /app/alembic.ini          <- alembic cwd-relative config
 #   /app/alembic/             <- alembic migrations
@@ -13,7 +22,7 @@
 #   /app/app/main.py          <- uvicorn entrypoint (app.main:app)
 #   /app/scripts/             <- helper scripts
 #   /app/static/              <- built SPA (served by FastAPI)
-#   /app/storage/             <- local-disk fallback (avatars, files, backups)
+#   /app/storage/             <- local-disk fallback
 
 # ---- Stage 1: build the SPA ----
 FROM node:20-alpine AS spa
@@ -37,20 +46,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential libpq-dev libmagic1 curl ca-certificates tini \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the backend directly to /app. `python -m uvicorn app.main:app` run
-# from /app resolves `app` to /app/app. `alembic upgrade head` run from
-# /app finds /app/alembic.ini (script_location = alembic -> /app/alembic).
-# `pip install -e /app[api]` installs the `app` package importable from
-# anywhere via the editable-install .pth file.
+# All paths below are repo-root-relative.
 COPY backend/pyproject.toml /app/pyproject.toml
 COPY backend/alembic.ini /app/alembic.ini
 COPY backend/alembic /app/alembic
-# Copy the Python package and every sub-package explicitly. Using a single
-# `COPY backend/app /app/app` works in local builds, but the storage/
-# sub-package has been getting dropped on some BuildKit deployments (it
-# appears to silently conflict with the .dockerignore pattern
-# `backend/storage/**` — different path, same prefix). Listing every
-# sub-dir avoids the ambiguity.
+# Copy the Python package and every sub-package explicitly to avoid
+# BuildKit silent glob-drop bugs.
 COPY backend/app/__init__.py /app/app/__init__.py
 COPY backend/app/api /app/app/api
 COPY backend/app/core /app/app/core
@@ -64,12 +65,8 @@ COPY backend/app/services /app/app/services
 COPY backend/app/storage /app/app/storage
 COPY backend/scripts /app/scripts
 
-# Sanity-check: if the COPY above ran against an empty build context
-# (because backend/app/storage/ was not tracked in git), /app/app/storage
-# would be empty and uvicorn would crash with
-# `ModuleNotFoundError: No module named 'app.storage'`. Fail the build
-# loud and early so it's obvious. Combined with the explicit `.dockerignore`
-# rules, this catches regressions.
+# Sanity-check: fail the build loud if the storage Python package is
+# missing (e.g. if app/storage/ wasn't tracked in git).
 RUN test -f /app/app/storage/__init__.py \
  && test -f /app/app/storage/base.py \
  && test -f /app/app/storage/local.py \
