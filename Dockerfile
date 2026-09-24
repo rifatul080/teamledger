@@ -1,9 +1,10 @@
 # Root-level Dockerfile for Railway / Fly.io / Koyeb / any platform that
 # auto-detects a Dockerfile at the repo root.
 #
-# Railway's service has Root Directory = ./backend, so Docker's build
-# context is ./backend. All COPY paths are relative to that context.
-# The frontend lives at ../frontend (one level up from the build context).
+# Railway's build context for this file is the repo root, even when the
+# service has Root Directory = ./backend. (Docker builds from the repo
+# root when picking up a Dockerfile at the root.) All COPY paths below
+# are repo-root-relative.
 #
 # For Cloudflare Containers, wrangler uses backend/Dockerfile directly
 # with image_build_context: "./", so this file is irrelevant there.
@@ -11,10 +12,10 @@
 # ---- Stage 1: build the SPA ----
 FROM node:20-alpine AS spa
 WORKDIR /spa
-COPY ../frontend/package.json ../frontend/package-lock.json* ./
+COPY frontend/package.json frontend/package-lock.json* ./
 # npm ci fails without lockfile; use npm install when absent (dev installs).
 RUN npm install --no-audit --no-fund
-COPY ../frontend ./
+COPY frontend ./
 RUN npm run build
 
 # ---- Stage 2: backend + serve SPA ----
@@ -32,15 +33,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Stage the backend tree at /app/_backend_src so the editable install
-# finds pyproject.toml and the package layout. Build context is ./backend
-# (Railway's Root Directory), so each path is a direct child of the
-# context root — except pyproject.toml which lives at the context root
-# itself.
-COPY ./pyproject.toml /app/_backend_src/pyproject.toml
-COPY ./app /app/_backend_src/app
-COPY ./alembic /app/_backend_src/alembic
-COPY ./alembic.ini /app/_backend_src/alembic.ini
-COPY ./scripts /app/_backend_src/scripts
+# finds pyproject.toml and the package layout. Build context is the repo
+# root, so each path is repo-root-relative.
+COPY backend/pyproject.toml /app/_backend_src/pyproject.toml
+COPY backend/app /app/_backend_src/app
+COPY backend/alembic /app/_backend_src/alembic
+COPY backend/alembic.ini /app/_backend_src/alembic.ini
+COPY backend/scripts /app/_backend_src/scripts
 
 RUN pip install --upgrade pip && pip install -e "/app/_backend_src[api]"
 
