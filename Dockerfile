@@ -1,19 +1,24 @@
 # Root-level Dockerfile for Railway / Fly.io / Koyeb / any platform that
 # auto-detects a Dockerfile at the repo root.
 #
-# Railway's build context for this file is the repo root, even when the
-# service has Root Directory = ./backend. (Docker builds from the repo
-# root when picking up a Dockerfile at the root.) All COPY paths below
-# are repo-root-relative.
-#
+# Build context = repo root. All COPY paths are repo-root-relative.
 # For Cloudflare Containers, wrangler uses backend/Dockerfile directly
 # with image_build_context: "./", so this file is irrelevant there.
+#
+# Layout (kept simple on purpose):
+#   /app/pyproject.toml       <- editable install target
+#   /app/alembic.ini          <- alembic cwd-relative config
+#   /app/alembic/             <- alembic migrations
+#   /app/app/                 <- Python package (importable as `app`)
+#   /app/app/main.py          <- uvicorn entrypoint (app.main:app)
+#   /app/scripts/             <- helper scripts
+#   /app/static/              <- built SPA (served by FastAPI)
+#   /app/storage/             <- local-disk fallback (avatars, files, backups)
 
 # ---- Stage 1: build the SPA ----
 FROM node:20-alpine AS spa
 WORKDIR /spa
 COPY frontend/package.json frontend/package-lock.json* ./
-# npm ci fails without lockfile; use npm install when absent (dev installs).
 RUN npm install --no-audit --no-fund
 COPY frontend ./
 RUN npm run build
@@ -32,35 +37,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential libpq-dev libmagic1 curl ca-certificates tini \
     && rm -rf /var/lib/apt/lists/*
 
-# Stage the backend tree at /app/_backend_src so the editable install
-# finds pyproject.toml and the package layout. Build context is the repo
-# root, so each path is repo-root-relative.
-COPY backend/pyproject.toml /app/_backend_src/pyproject.toml
-COPY backend/app /app/_backend_src/app
-COPY backend/alembic /app/_backend_src/alembic
-COPY backend/alembic.ini /app/_backend_src/alembic.ini
-COPY backend/scripts /app/_backend_src/scripts
-
-# Also copy alembic.ini and the alembic/ migrations dir to /app so alembic
-# finds them when invoked from /app (the WORKDIR). The originals stay
-# in /app/_backend_src for the editable install.
+# Copy the backend directly to /app. `python -m uvicorn app.main:app` run
+# from /app resolves `app` to /app/app. `alembic upgrade head` run from
+# /app finds /app/alembic.ini (script_location = alembic -> /app/alembic).
+# `pip install -e /app[api]` installs the `app` package importable from
+# anywhere via the editable-install .pth file.
+COPY backend/pyproject.toml /app/pyproject.toml
 COPY backend/alembic.ini /app/alembic.ini
 COPY backend/alembic /app/alembic
+COPY backend/app /app/app
+COPY backend/scripts /app/scripts
 
-RUN pip install --upgrade pip && pip install -e "/app/_backend_src[api]"
-
-# Mirror the Python sources to /app/app so the entrypoint command
-# (`python -m uvicorn app.main:app`) resolves at the conventional location.
-RUN cp -r /app/_backend_src/app /app/app
+RUN pip install --upgrade pip && pip install -e "/app[api]"
 
 COPY --from=spa /spa/dist /app/static
 
-# Storage directories for the local-disk fallback.
 RUN mkdir -p /app/storage/files /app/storage/avatars /app/storage/backups
 
-# Run as a non-root user.
 RUN useradd --create-home --uid 10001 --shell /bin/bash app \
-    && chown -R app:app /app /app/_backend_src
+    && chown -R app:app /app
 USER app
 
 ENV PORT=8080

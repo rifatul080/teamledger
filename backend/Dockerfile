@@ -3,14 +3,23 @@
 # All COPY paths here are relative to the build context root (./), so
 # `frontend/`, `backend/`, etc. are repo-root-relative paths.
 #
-# For Railway / Render / Fly / etc. the root-level Dockerfile handles the
-# build instead, and adapts to its build context.
+# This Dockerfile is identical in structure to the root-level Dockerfile,
+# the only difference being the COPY paths start with `backend/` (because
+# the build context is the repo root).
+#
+# Layout:
+#   /app/pyproject.toml
+#   /app/alembic.ini
+#   /app/alembic/
+#   /app/app/                 <- importable as `app`
+#   /app/scripts/
+#   /app/static/              <- SPA
+#   /app/storage/             <- local-disk fallback
 
 # ---- Stage 1: build the SPA ----
 FROM node:20-alpine AS spa
 WORKDIR /spa
 COPY frontend/package.json frontend/package-lock.json* ./
-# npm ci fails without lockfile; use npm install when absent (dev installs).
 RUN npm install --no-audit --no-fund
 COPY frontend ./
 RUN npm run build
@@ -29,35 +38,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential libpq-dev libmagic1 curl ca-certificates tini \
     && rm -rf /var/lib/apt/lists/*
 
-# Stage the backend tree at /app/_backend_src so the editable install
-# finds pyproject.toml and the package layout. Build context is the repo
-# root, so each path is a direct child of the context.
-COPY backend/pyproject.toml /app/_backend_src/pyproject.toml
-COPY backend/app /app/_backend_src/app
-COPY backend/alembic /app/_backend_src/alembic
-COPY backend/alembic.ini /app/_backend_src/alembic.ini
-COPY backend/scripts /app/_backend_src/scripts
-
-# Also copy alembic.ini and the alembic/ migrations dir to /app so alembic
-# finds them when invoked from /app (the WORKDIR). The originals stay
-# in /app/_backend_src for the editable install.
+COPY backend/pyproject.toml /app/pyproject.toml
 COPY backend/alembic.ini /app/alembic.ini
 COPY backend/alembic /app/alembic
+COPY backend/app /app/app
+COPY backend/scripts /app/scripts
 
-RUN pip install --upgrade pip && pip install -e "/app/_backend_src[api]"
-
-# Mirror the Python sources to /app/app so the entrypoint command
-# (`python -m uvicorn app.main:app`) resolves at the conventional location.
-RUN cp -r /app/_backend_src/app /app/app
+RUN pip install --upgrade pip && pip install -e "/app[api]"
 
 COPY --from=spa /spa/dist /app/static
 
-# Storage directories for the local-disk fallback.
 RUN mkdir -p /app/storage/files /app/storage/avatars /app/storage/backups
 
-# Run as a non-root user.
 RUN useradd --create-home --uid 10001 --shell /bin/bash app \
-    && chown -R app:app /app /app/_backend_src
+    && chown -R app:app /app
 USER app
 
 ENV PORT=8080
@@ -65,4 +59,4 @@ EXPOSE 8080
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
 
-CMD ["bash", "-lc", "alembic upgrade head && exec python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers"]
+CMD ["bash", "-lc", "alembic upgrade head && exec python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080} --proxy-headers"]
