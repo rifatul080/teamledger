@@ -41,7 +41,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY backend/pyproject.toml /app/pyproject.toml
 COPY backend/alembic.ini /app/alembic.ini
 COPY backend/alembic /app/alembic
-COPY backend/app /app/app
+# See ../Dockerfile for why we list every sub-package explicitly.
+COPY backend/app/__init__.py /app/app/__init__.py
+COPY backend/app/api /app/app/api
+COPY backend/app/core /app/app/core
+COPY backend/app/db /app/app/db
+COPY backend/app/models /app/app/models
+COPY backend/app/notifications /app/app/notifications
+COPY backend/app/realtime /app/app/realtime
+COPY backend/app/schemas /app/app/schemas
+COPY backend/app/scoring /app/app/scoring
+COPY backend/app/services /app/app/services
+COPY backend/app/storage /app/app/storage
 COPY backend/scripts /app/scripts
 
 RUN pip install --upgrade pip && pip install -e "/app[api]"

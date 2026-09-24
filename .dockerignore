@@ -33,10 +33,11 @@ backend/.tox
 backend/**.pyc
 backend/**.pyo
 backend/**.egg-info
-# Exclude the local-disk storage dir at the repo level (avatars, files,
-# backups). The Python package at backend/app/storage/ is NOT excluded — it
-# has a different path. The pattern below is path-anchored and won't match
-# backend/app/storage.
+# Local-disk runtime data dir (avatars, files, backups) at the top
+# level of backend/. The Python package at backend/app/storage/ is a
+# DIFFERENT path and must NOT be excluded — name the pattern precisely
+# so BuildKit cannot confuse the two.
+backend/storage
 backend/storage/**
 backend/static
 backend/*.db
