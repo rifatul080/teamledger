@@ -55,6 +55,13 @@ COPY backend/app/services /app/app/services
 COPY backend/app/storage /app/app/storage
 COPY backend/scripts /app/scripts
 
+# Sanity-check: build fails loud if the storage Python package is missing
+# (e.g. if backend/app/storage/ wasn't tracked in git).
+RUN test -f /app/app/storage/__init__.py \
+ && test -f /app/app/storage/base.py \
+ && test -f /app/app/storage/local.py \
+ && echo "storage package present: $(ls /app/app/storage)"
+
 RUN pip install --upgrade pip && pip install -e "/app[api]"
 
 COPY --from=spa /spa/dist /app/static

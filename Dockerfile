@@ -64,6 +64,17 @@ COPY backend/app/services /app/app/services
 COPY backend/app/storage /app/app/storage
 COPY backend/scripts /app/scripts
 
+# Sanity-check: if the COPY above ran against an empty build context
+# (because backend/app/storage/ was not tracked in git), /app/app/storage
+# would be empty and uvicorn would crash with
+# `ModuleNotFoundError: No module named 'app.storage'`. Fail the build
+# loud and early so it's obvious. Combined with the explicit `.dockerignore`
+# rules, this catches regressions.
+RUN test -f /app/app/storage/__init__.py \
+ && test -f /app/app/storage/base.py \
+ && test -f /app/app/storage/local.py \
+ && echo "storage package present: $(ls /app/app/storage)"
+
 RUN pip install --upgrade pip && pip install -e "/app[api]"
 
 COPY --from=spa /spa/dist /app/static
