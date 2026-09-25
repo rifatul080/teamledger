@@ -19,7 +19,7 @@ so the API must set `SameSite=None; Secure`.
 2. **Render Web Service**
    - Connect this repo as a "Web Service".
    - **Runtime**: Docker
-   - **Root Directory**: `.` *(the repo root — required because the Dockerfile copies `backend/...`)*
+   - **Root Directory**: `./backend` *(keeps the build context small and lets `Dockerfile.api` use `./app/...` paths directly)*
    - **Dockerfile Path**: `./Dockerfile.api`
    - **Health Check Path**: `/healthz`
    - **Environment Variables**:

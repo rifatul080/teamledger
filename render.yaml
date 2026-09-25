@@ -2,8 +2,10 @@
 # (Vercel recommended). This avoids building the React SPA inside the
 # backend image and lets each tier scale independently.
 #
-# Build context is the repo root so the root Dockerfile (which has no
-# SPA build stage) is used.
+# Build context = ./backend/ (render.yaml's rootDir). The Dockerfile
+# (backend/Dockerfile.api) is built with the context pinned to
+# ./backend/, so its COPY paths (`app/...`, `alembic/...`) resolve
+# directly without needing repo-root prefixes.
 #
 # Apply: render blueprint launch (or `render deploys create` after
 # connecting the repo). Set DATABASE_URL and SECRET_KEY in the dashboard.
@@ -13,7 +15,10 @@ services:
     name: teamledger-api
     plan: free
     runtime: docker
-    rootDir: .
+    # Build context = ./backend/. The Dockerfile copies `app/...` and
+    # `alembic/...` from inside the context, so the build works without
+    # needing repo-root paths.
+    rootDir: ./backend
     dockerfilePath: ./Dockerfile.api
     healthCheckPath: /healthz
     autoDeploy: true
