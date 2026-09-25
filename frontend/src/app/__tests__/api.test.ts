@@ -63,3 +63,31 @@ describe("api", () => {
     } as ApiError);
   });
 });
+
+// Cross-origin deploy (Vercel + Render split): verify the same request
+// path that same-origin requests use still resolves to "<origin>/api/v1/...".
+// Vite's `import.meta.env.VITE_API_BASE_URL` is inlined at build time and
+// cannot be re-stubbed per-test by vi.stubEnv, so we exercise the URL
+// builder directly here. The cross-origin branch is covered by reading
+// import.meta.env in api.ts (see getBaseUrl()).
+describe("api URL building", () => {
+  it("prepends /api/v1 to a relative path", async () => {
+    const { buildUrl } = await import("../api");
+    const u = buildUrl("/auth/me");
+    expect(u.toString()).toMatch(/\/api\/v1\/auth\/me$/);
+  });
+
+  it("handles paths without a leading slash", async () => {
+    const { buildUrl } = await import("../api");
+    const u = buildUrl("auth/me");
+    expect(u.toString()).toMatch(/\/api\/v1\/auth\/me$/);
+  });
+
+  it("appends query params to the resolved URL", async () => {
+    const { buildUrl } = await import("../api");
+    const u = buildUrl("/search", { q: "abc", page: 2 });
+    expect(u.searchParams.get("q")).toBe("abc");
+    expect(u.searchParams.get("page")).toBe("2");
+    expect(u.pathname).toBe("/api/v1/search");
+  });
+});

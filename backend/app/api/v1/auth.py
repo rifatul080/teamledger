@@ -44,17 +44,22 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 def _set_auth_cookies(response: Response, *, access: str, refresh: str, csrf: str) -> None:
     settings = get_settings()
-    secure = settings.app_env not in {"development", "test"}
+    # SameSite=None requires Secure=True (browsers reject it otherwise).
+    # SameSite=None is needed when the frontend and API are on different
+    # origins (e.g. Vercel + Render split deploy); same-origin mono-host
+    # deploys use the default "lax".
+    samesite = settings.cookie_samesite
+    secure = settings.app_env not in {"development", "test"} or samesite == "none"
     response.set_cookie(
-        "tl_access", access, httponly=True, secure=secure, samesite="lax",
+        "tl_access", access, httponly=True, secure=secure, samesite=samesite,
         max_age=settings.access_token_ttl_min * 60, path="/",
     )
     response.set_cookie(
-        "tl_refresh", refresh, httponly=True, secure=secure, samesite="lax",
+        "tl_refresh", refresh, httponly=True, secure=secure, samesite=samesite,
         max_age=settings.refresh_token_ttl_days * 24 * 3600, path="/",
     )
     response.set_cookie(
-        "tl_csrf", csrf, secure=secure, samesite="lax",
+        "tl_csrf", csrf, secure=secure, samesite=samesite,
         max_age=settings.refresh_token_ttl_days * 24 * 3600, path="/",
     )
 

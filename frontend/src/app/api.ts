@@ -1,7 +1,42 @@
 // Thin fetch wrapper. Same-origin + credentials so HttpOnly cookies flow.
 // Reads X-CSRF-Token from cookie for unsafe methods.
+//
+// API base URL is read from VITE_API_BASE_URL when set (cross-origin
+// deploy: Vercel frontend + Render/Fly backend). When unset (local dev or
+// same-origin mono-host deploy), requests go to "<origin>/api/v1/...".
 
-const BASE = "/api/v1";
+const BASE_PATH = "/api/v1";
+
+function getBaseUrl(): string {
+  // Vite injects import.meta.env at build time. Anything starting with
+  // https:// or http:// is treated as an absolute origin; anything else is
+  // appended to the current origin (default same-origin).
+  const raw = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
+  if (!raw) return window.location.origin;
+  if (/^https?:\/\//i.test(raw)) return raw.replace(/\/+$/, "");
+  // Same-origin-relative override (e.g. "/api").
+  return new URL(raw, window.location.origin).origin;
+}
+
+const BASE = getBaseUrl();
+
+export function buildUrl(path: string, params?: ApiOpts["params"]): URL {
+  // BASE is an origin (e.g. "https://api.example.com" or window.location.origin).
+  // path is what callers pass — "/foo", "/auth/login", etc. We prepend
+  // BASE_PATH ("/api/v1") so requests hit the versioned API namespace.
+  // Both BASE_PATH and path are normalized to start with a single "/".
+  const normalizedPath =
+    (BASE_PATH.endsWith("/") ? BASE_PATH : BASE_PATH + "/") +
+    (path.startsWith("/") ? path.slice(1) : path);
+  const url = new URL(BASE.replace(/\/+$/, "") + normalizedPath);
+  if (params) {
+    for (const [k, v] of Object.entries(params)) {
+      if (v === undefined || v === null) continue;
+      url.searchParams.set(k, String(v));
+    }
+  }
+  return url;
+}
 
 type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
@@ -43,13 +78,7 @@ export type ApiOpts = {
 };
 
 export async function api<T = unknown>(path: string, opts: ApiOpts = {}): Promise<T> {
-  const url = new URL(BASE + path, window.location.origin);
-  if (opts.params) {
-    for (const [k, v] of Object.entries(opts.params)) {
-      if (v === undefined || v === null) continue;
-      url.searchParams.set(k, String(v));
-    }
-  }
+  const url = buildUrl(path, opts.params);
   const headers: Record<string, string> = {};
   if (!opts.raw) headers["Content-Type"] = "application/json";
   const method = opts.method ?? "GET";
@@ -95,13 +124,7 @@ export async function api<T = unknown>(path: string, opts: ApiOpts = {}): Promis
 }
 
 export async function apiDownload(path: string, opts: ApiOpts = {}): Promise<Blob> {
-  const url = new URL(BASE + path, window.location.origin);
-  if (opts.params) {
-    for (const [k, v] of Object.entries(opts.params)) {
-      if (v === undefined || v === null) continue;
-      url.searchParams.set(k, String(v));
-    }
-  }
+  const url = buildUrl(path, opts.params);
   const headers: Record<string, string> = {};
   const method = opts.method ?? "GET";
   if (method !== "GET" && !opts.skipCsrf) {

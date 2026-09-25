@@ -68,6 +68,14 @@ class Settings(BaseSettings):
 
     default_timezone: str = "UTC"
 
+    # Cookie SameSite. Defaults to "lax" so the same-origin mono-host
+    # deploy (Render / Fly.io serving API + SPA from one origin) keeps
+    # working without changes. Set to "none" when the frontend is on a
+    # different origin than the API (Vercel + Render split deploy).
+    # "none" requires Secure=True — we force that automatically when this
+    # is "none".
+    cookie_samesite: Literal["lax", "strict", "none"] = "lax"
+
     # Public URL the mailer uses to build verification / reset links.
     public_base_url: str = "http://localhost:5173"
 

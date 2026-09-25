@@ -35,3 +35,13 @@ def test_settings_keeps_explicit_psycopg(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg2://u:p@h/d")
     s = Settings()
     assert s.database_url == "postgresql+psycopg2://u:p@h/d"
+
+
+def test_cookie_samesite_default_lax(monkeypatch):
+    monkeypatch.delenv("COOKIE_SAMESITE", raising=False)
+    assert Settings().cookie_samesite == "lax"
+
+
+def test_cookie_samesite_env_overrides(monkeypatch):
+    monkeypatch.setenv("COOKIE_SAMESITE", "none")
+    assert Settings().cookie_samesite == "none"
