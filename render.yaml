@@ -1,11 +1,17 @@
 # Render blueprint — API-only deploy. The frontend is hosted separately
-# (Vercel recommended). This avoids building the React SPA inside the
-# backend image and lets each tier scale independently.
+# (Vercel recommended).
 #
-# Build context = ./backend/ (render.yaml's rootDir). The Dockerfile
-# (backend/Dockerfile.api) is built with the context pinned to
-# ./backend/, so its COPY paths (`app/...`, `alembic/...`) resolve
-# directly without needing repo-root prefixes.
+# IMPORTANT: Render's Docker service uses the REPO ROOT as the build
+# context regardless of where the Dockerfile lives. The root-level
+# `Dockerfile` has repo-root-relative COPY paths (e.g. `backend/app/...`),
+# so it works. We DO NOT use backend/Dockerfile.api here because its
+# paths (`app/...`, `alembic/...`) assume the context is ./backend/, which
+# Render never sets for Docker services.
+#
+# The root Dockerfile also builds the SPA stage. For the split deploy
+# (Vercel hosts the SPA), this build step is wasted work but doesn't
+# break anything — the built SPA inside the image is never served
+# because the frontend lives on Vercel.
 #
 # Apply: render blueprint launch (or `render deploys create` after
 # connecting the repo). Set DATABASE_URL and SECRET_KEY in the dashboard.
@@ -15,11 +21,10 @@ services:
     name: teamledger-api
     plan: free
     runtime: docker
-    # Build context = ./backend/. The Dockerfile copies `app/...` and
-    # `alembic/...` from inside the context, so the build works without
-    # needing repo-root paths.
-    rootDir: ./backend
-    dockerfilePath: ./Dockerfile.api
+    # Render's Docker build context is the repo root, so the Dockerfile
+    # lives at the root too. backend/Dockerfile.api is a sibling for
+    # platforms that pin the context to ./backend/.
+    dockerfilePath: ./Dockerfile
     healthCheckPath: /healthz
     autoDeploy: true
     envVars:

@@ -16,11 +16,10 @@ so the API must set `SameSite=None; Secure`.
      - `VITE_API_BASE_URL` = `https://<your-render-app>.onrender.com`
        *(no trailing slash, no `/api/v1`)*
 
-2. **Render Web Service**
+2. **Render Web Service** (Docker)
    - Connect this repo as a "Web Service".
-   - **Runtime**: Docker
-   - **Root Directory**: `./backend` *(keeps the build context small and lets `Dockerfile.api` use `./app/...` paths directly)*
-   - **Dockerfile Path**: `./Dockerfile.api`
+   - **Language**: Docker
+   - **Dockerfile Path**: `./Dockerfile` *(Render uses the repo root as the build context, so the root Dockerfile works as-is. The root Dockerfile also builds the SPA stage, which is harmless but wasted work for this split deploy — the SPA is served from Vercel.)*
    - **Health Check Path**: `/healthz`
    - **Environment Variables**:
      | Key | Value |

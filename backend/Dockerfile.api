@@ -1,15 +1,15 @@
-# API-only Dockerfile — sibling of backend/Dockerfile, intended for the
-# Vercel (frontend) + Render (backend) split deploy. No SPA build stage.
+# API-only Dockerfile — reference / alternative. NOT used by Render's
+# Docker service (Render always builds from the repo root, regardless of
+# dockerfilePath; the root-level ./Dockerfile is what render.yaml points
+# at). Kept here as the source for future platforms that pin the build
+# context to ./backend/ (e.g. some CI setups that cd into backend/).
 #
-# Build context: ./backend/  (Render resolves `dockerfilePath:
-# ./Dockerfile.api` relative to the build context, and Render's build
-# context for a blueprint service is `rootDir`; setting both to
-# ./backend/ keeps things simple. If you change rootDir on Render to ".",
-# also switch dockerfilePath to ../Dockerfile.api.)
+# The COPY paths below assume the build context is ./backend/. To use
+# this file in such a setup, build with:
+#   docker build -f backend/Dockerfile.api backend/
 #
-# This file is for the SPLIT deploy only. The original backend/Dockerfile
-# remains the canonical mono-host (API + SPA) image used by Render's
-# single-service deploy, Cloudflare Containers, etc.
+# For the actual split-deploy workflow (Vercel + Render), see
+# docs/DEPLOY_SPLIT_VERCEL_RENDER.md and render.yaml.
 
 FROM python:3.12-slim
 
