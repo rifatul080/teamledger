@@ -22,9 +22,10 @@ services:
     plan: free
     runtime: docker
     # Render's Docker build context is the repo root, so the Dockerfile
-    # lives at the root too. backend/Dockerfile.api is a sibling for
-    # platforms that pin the context to ./backend/.
+    # lives at the root too. dockerContext is set explicitly to "." so
+    # there's no ambiguity (Render defaults to the repo root anyway).
     dockerfilePath: ./Dockerfile
+    dockerContext: .
     healthCheckPath: /healthz
     autoDeploy: true
     envVars:
