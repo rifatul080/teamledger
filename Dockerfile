@@ -1,7 +1,14 @@
-# Root-level Dockerfile for Railway / Fly.io / Koyeb / any platform that
-# auto-detects a Dockerfile at the repo root.
+# Root-level Dockerfile for Railway / Fly.io / Koyeb / Render / any
+# platform that auto-detects a Dockerfile at the repo root.
 #
 # Build context: REPOSITORY ROOT.
+#
+# CACHE BUSTER: bump the value below whenever COPY paths change to
+# force Render's BuildKit cache to invalidate. Render aggressively
+# reuses cached layers across deploys, and a stale cache from a
+# previous (failed) build can persist with the wrong context snapshot
+# and fail forever with errors like "/backend/app/__init__.py": not
+# found. Bumping this forces a clean rebuild.
 #
 # IMPORTANT for Railway: this Dockerfile expects the build context to be
 # the repo root (so it can `COPY backend/...` and `COPY frontend/...`).
@@ -45,6 +52,10 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential libpq-dev libmagic1 curl ca-certificates tini \
     && rm -rf /var/lib/apt/lists/*
+
+# Cache buster — see comment at top of file. Bump on COPY-path changes.
+ARG CACHE_BUST=2
+RUN echo "cache-bust=$CACHE_BUST" > /tmp/cache_bust
 
 # All paths below are repo-root-relative.
 COPY backend/pyproject.toml /app/pyproject.toml

@@ -55,6 +55,11 @@ so the API must set `SameSite=None; Secure`.
 
 ## Troubleshooting
 
+- **Build error `failed to calculate checksum ... "/backend/app/__init__.py": not found`** on Render: this is almost always a **stale BuildKit cache**, not a real path issue. The root `Dockerfile` has the correct `COPY backend/app/...` paths. Two ways to fix:
+  1. **Easiest**: in the Render Dashboard, go to your service → Settings → **"Clear build cache"** → trigger a new deploy.
+  2. **Or**: open Settings → **Docker Command** and add `docker build --no-cache` (Render will pass this through).
+  3. **Or**: edit any tracked file and push a commit — Render's cache is keyed on commit SHA, so a fresh commit forces a fresh build.
+- **Render Dashboard fields not matching `render.yaml`**: if your Render service was created **via Dashboard** (not as a Blueprint), it does NOT read `dockerfilePath` from `render.yaml`. You must manually set **Dockerfile Path** to `./Dockerfile` in the service's Settings page. To make `render.yaml` authoritative, delete the service and re-create it as a Blueprint (New → Blueprint).
 - **Cookies not sticking on Vercel**: confirm `COOKIE_SAMESITE=none` and
   that you're hitting the page over `https://`. `SameSite=None` requires
   `Secure`, which requires HTTPS.
