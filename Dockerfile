@@ -54,26 +54,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Cache buster — see comment at top of file. Bump on COPY-path changes.
-ARG CACHE_BUST=2
+ARG CACHE_BUST=3
 RUN echo "cache-bust=$CACHE_BUST" > /tmp/cache_bust
 
 # All paths below are repo-root-relative.
 COPY backend/pyproject.toml /app/pyproject.toml
 COPY backend/alembic.ini /app/alembic.ini
 COPY backend/alembic /app/alembic
-# Copy the Python package and every sub-package explicitly to avoid
-# BuildKit silent glob-drop bugs.
-COPY backend/app/__init__.py /app/app/__init__.py
-COPY backend/app/api /app/app/api
-COPY backend/app/core /app/app/core
-COPY backend/app/db /app/app/db
-COPY backend/app/models /app/app/models
-COPY backend/app/notifications /app/app/notifications
-COPY backend/app/realtime /app/app/realtime
-COPY backend/app/schemas /app/app/schemas
-COPY backend/app/scoring /app/app/scoring
-COPY backend/app/services /app/app/services
-COPY backend/app/storage /app/app/storage
+# Copy the entire backend/app tree as one unit so we don't silently drop
+# files (e.g. main.py) that aren't in any sub-package directory. This
+# includes the just-restored __init__.py marker files for the `app`
+# and `app.api` packages.
+COPY backend/app /app/app
 COPY backend/scripts /app/scripts
 
 # Sanity-check: fail the build loud if the storage Python package is
