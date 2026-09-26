@@ -1,0 +1,30 @@
+name: uptime
+
+on:
+  schedule:
+    # Render Free spins down after 15 min without inbound traffic; a ping
+    # every 5 min keeps the instance (and Neon, via health/db SELECT 1)
+    # awake. Repo is public => scheduled runs are free.
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  keep-alive:
+    name: ping render (keep-alive)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: GET /api/v1/health/db
+        run: |
+          code=$(curl -sS --fail-with-body --retry 4 --retry-delay 15 \
+            --retry-all-errors -o /tmp/health.json -w '%{http_code}' \
+            --max-time 90 https://teamledger-1.onrender.com/api/v1/health/db \
+            || true)
+          echo "HTTP $code"
+          cat /tmp/health.json 2>/dev/null || true
+          echo
+          test "$code" = "200" || exit 1
+          grep -q '"database":"ok"' /tmp/health.json
