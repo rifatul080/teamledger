@@ -6,7 +6,6 @@ the teams the caller belongs to (current memberships).
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from ...api.deps import current_user, get_db

@@ -13,7 +13,6 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from ...api.deps import current_user, get_db
-from ...core.ids import new_id
 from ...models.audit import AuditEvent
 from ...models.membership import Membership
 from ...models.notification import Notification

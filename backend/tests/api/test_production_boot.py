@@ -66,9 +66,8 @@ def test_alembic_runs_against_fresh_db(prod_env) -> None:
 
     from alembic import command
     from alembic.config import Config as AlembicConfig
-    from sqlalchemy import create_engine, inspect
-
     from app.core.config import get_settings
+    from sqlalchemy import create_engine, inspect
 
     s = get_settings()
     cfg = AlembicConfig(str(Path(__file__).resolve().parents[2] / "alembic.ini"))

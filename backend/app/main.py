@@ -14,6 +14,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.responses import FileResponse, PlainTextResponse, Response
 from starlette.routing import compile_path
 
 from .api.v1 import api_v1_router
@@ -168,9 +169,7 @@ def create_app() -> FastAPI:
     # registered after it is unreachable whenever a built SPA exists at
     # ./static — which is always the case inside the Docker image.
     @app.get("/robots.txt", include_in_schema=False)
-    async def robots_txt():
-        from starlette.responses import PlainTextResponse
-
+    async def robots_txt() -> PlainTextResponse:
         body = (
             "User-agent: *\n"
             "Allow: /\n"
@@ -184,9 +183,7 @@ def create_app() -> FastAPI:
         return PlainTextResponse(body, media_type="text/plain")
 
     @app.get("/sitemap.xml", include_in_schema=False)
-    async def sitemap_xml():
-        from starlette.responses import Response as _Resp
-
+    async def sitemap_xml() -> Response:
         base = settings.public_base_url.rstrip("/")
         urls = ["", "/login", "/signup"]
         xml = ['<?xml version="1.0" encoding="UTF-8"?>']
@@ -202,7 +199,7 @@ def create_app() -> FastAPI:
                 + "</lastmod></url>"
             )
         xml.append("</urlset>")
-        return _Resp("\n".join(xml), media_type="application/xml")
+        return Response("\n".join(xml), media_type="application/xml")
 
     # ----- SPA static fallback -----
     # If a built SPA exists at ./static (the docker path), serve it from here.
@@ -217,8 +214,6 @@ def create_app() -> FastAPI:
             StaticFiles(directory=str(static_dir / "assets")),
             name="spa-assets",
         )
-
-        from starlette.responses import FileResponse
 
         # Path matchers for the real API routes, derived from the generated
         # OpenAPI schema. The catch-all route below matches *every* path,
@@ -243,11 +238,11 @@ def create_app() -> FastAPI:
                 api_path_matchers.append((regex, api_methods))
 
         @app.get("/", include_in_schema=False)
-        async def spa_index():
+        async def spa_index() -> FileResponse:
             return FileResponse(static_dir / "index.html")
 
         @app.get("/{full_path:path}", include_in_schema=False)
-        async def spa_spa_catch(full_path: str):
+        async def spa_spa_catch(full_path: str) -> Response:
             # Don't shadow static assets.
             if full_path.startswith("assets/"):
                 return JSONResponse({"error": "not found"}, status_code=404)

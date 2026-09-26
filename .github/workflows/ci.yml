@@ -10,6 +10,9 @@ jobs:
   backend:
     name: backend (postgres)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
     services:
       postgres:
         image: postgres:16
@@ -56,6 +59,9 @@ jobs:
   backend-sqlite:
     name: backend (sqlite)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
     env:
       # In-memory SQLite per test (driven by tests/conftest.py).
       SECRET_KEY: ci-secret-key-please-change

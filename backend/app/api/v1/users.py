@@ -1,13 +1,11 @@
 """User + avatar endpoints (v2)."""
 from __future__ import annotations
 
-import secrets
-
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from sqlalchemy.orm import Session
 
-from ...api.deps import current_user, get_db
 from ...api.deps import audit as audit_log
+from ...api.deps import current_user, get_db
 from ...core.config import get_settings
 from ...core.errors import AppError
 from ...models.user import User

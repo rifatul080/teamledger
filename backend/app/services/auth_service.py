@@ -11,10 +11,10 @@ from ..core.errors import conflict, not_found, unauthorized, validation
 from ..core.ids import new_id
 from ..core.security import hash_password, password_strength_ok, verify_password
 from ..core.tokens import encode_jwt, hash_token, random_token
+from ..models.email_verification import EmailVerificationToken
 from ..models.password_reset import PasswordResetToken
 from ..models.refresh_session import RefreshSession
 from ..models.user import User
-from ..models.email_verification import EmailVerificationToken
 
 
 @dataclass(frozen=True)
@@ -56,7 +56,7 @@ def create_user(
         password_hash=hash_password(password),
         is_active=True,
         email_verified=email_verified,
-        institution=(institution or None) and institution.strip()[:255] or None,
+        institution=((institution or None) and institution.strip()[:255]) or None,
         created_at=datetime.now(tz=UTC),
     )
     db.add(user)

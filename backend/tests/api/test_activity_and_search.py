@@ -1,7 +1,6 @@
 """v2 — activity feed + search endpoint + robots/sitemap tests."""
 from __future__ import annotations
 
-from app.api.deps import audit
 from tests.api._helpers import AuthedClient, signup
 
 
@@ -46,9 +45,10 @@ def test_unread_count_endpoint(client):
 
 
 def test_mark_activity_read_all(client, db):
-    from app.db.session import get_engine
-    from app.core.ids import new_id
     from datetime import UTC, datetime
+
+    from app.core.ids import new_id
+    from app.db.session import get_engine
     from sqlalchemy import text
 
     signup(client, "marker@example.org")
@@ -79,9 +79,10 @@ def test_mark_activity_read_all(client, db):
 
 
 def test_mark_activity_read_by_kind(client, db):
-    from app.db.session import get_engine
-    from app.core.ids import new_id
     from datetime import UTC, datetime
+
+    from app.core.ids import new_id
+    from app.db.session import get_engine
     from sqlalchemy import text
 
     signup(client, "markkind@example.org")

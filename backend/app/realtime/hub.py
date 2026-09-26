@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 from collections import defaultdict
+from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -50,10 +51,8 @@ class WebSocketHub:
             connections = list(self._by_team.get(team_id, set()))
         for conn in connections:
             if conn.user_id == user_id:
-                try:
+                with suppress(Exception):
                     await conn.ws.close(code=4401)
-                except Exception:
-                    pass
                 await self.remove(conn)
                 closed += 1
         return closed

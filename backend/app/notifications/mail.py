@@ -168,8 +168,7 @@ async def deliver(db: Session, user: User, *, req: NotifRequest, mail_enabled: b
 # v2 — direct transactional email senders for verification + password reset.
 # Real mailers (Resend, SES, SMTP) plug in via `MAIL_BACKEND`.
 
-import logging as _log
-_log = _log.getLogger("teamledger.mail")
+_log = logging.getLogger("teamledger.mail")
 
 PUBLIC_BASE_URL = ""  # set per call from settings when needed
 
@@ -242,9 +241,11 @@ def _send_resend(*, to: str, subject: str, body: str, settings) -> dict:
             },
             method="POST",
         )
-        with _u.urlopen(req, timeout=10) as r:
+        # Target is the hardcoded https://api.resend.com/emails literal built
+        # above — configuration, never user-controlled input.
+        with _u.urlopen(req, timeout=10) as r:  # nosec B310
             return {"status": "ok", "provider": "resend", "code": r.status}
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         _log.exception("Resend send failed: %s", e)
         return {"status": "error", "provider": "resend", "error": str(e)}
 
@@ -262,6 +263,6 @@ def _send_smtp(*, to: str, subject: str, body: str, settings) -> dict:
         with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10) as s:
             s.send_message(msg)
         return {"status": "ok", "provider": "smtp"}
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         _log.exception("SMTP send failed: %s", e)
         return {"status": "error", "provider": "smtp", "error": str(e)}

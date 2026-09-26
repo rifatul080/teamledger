@@ -13,6 +13,8 @@ module.exports = {
   ignorePatterns: ["dist", "node_modules", "coverage"],
   rules: {
     "react/react-in-jsx-scope": "off",
+    // Prose in JSX (apostrophes, quotes in UI copy) — flagging it is noise.
+    "react/no-unescaped-entities": "off",
     "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
   },
 };

@@ -132,6 +132,4 @@ def safe_member_name(name: str) -> bool:
         return False
     if _TRAVERSAL_RE.search(name):
         return False
-    if "\x00" in name:
-        return False
-    return True
+    return "\x00" not in name

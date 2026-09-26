@@ -4,7 +4,6 @@ from __future__ import annotations
 import pytest
 from _helpers import AuthedClient, signup
 
-
 # --- Direct add member (existing user, no email) --------------------------
 
 
@@ -150,9 +149,8 @@ def test_invite_link_expired(client, db_engine) -> None:
     # Force expiry by direct DB write.
     from datetime import UTC, datetime, timedelta
 
-    from sqlalchemy.orm import sessionmaker
-
     from app.models.invitation import Invitation
+    from sqlalchemy.orm import sessionmaker
 
     SF = sessionmaker(bind=db_engine, autoflush=False, autocommit=False, expire_on_commit=False)
     with SF() as db:

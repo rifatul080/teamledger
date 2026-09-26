@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from ..core.ids import new_id
@@ -24,7 +24,7 @@ class LocalDiskStorage:
         return p
 
     def _build_path(self, team_id: str, original_name: str) -> tuple[str, str]:
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         safe = safe_basename(original_name)
         path = f"teams/{team_id}/{now:%Y/%m}/{new_id()}_{safe}"
         return path, safe

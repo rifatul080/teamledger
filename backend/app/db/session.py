@@ -33,7 +33,8 @@ def get_engine() -> Engine:
 def get_sessionmaker() -> sessionmaker[Session]:
     if _SessionLocal is None:
         get_engine()
-    assert _SessionLocal is not None
+    if _SessionLocal is None:
+        raise RuntimeError("database sessionmaker failed to initialize")
     return _SessionLocal
 
 

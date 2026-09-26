@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from contextlib import suppress
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
@@ -35,10 +36,8 @@ def _safe_broadcast(coro) -> None:
     except RuntimeError:
         # No running loop (e.g. TestClient sync context). Close the coroutine
         # so we don't leak a "never-awaited" warning, then return.
-        try:
+        with suppress(Exception):
             coro.close()
-        except Exception:
-            pass
         return
     loop.create_task(coro)
 

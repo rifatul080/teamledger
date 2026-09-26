@@ -4,10 +4,11 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 from sqlalchemy.orm import Session
 
-from ...api.deps import audit as audit_log, current_user, get_db
+from ...api.deps import audit as audit_log
+from ...api.deps import current_user, get_db
 from ...api.rate_limit import limiter as rate_limiter
 from ...core.config import get_settings
-from ...core.errors import AppError, validation
+from ...core.errors import AppError
 from ...models.user import User
 from ...notifications import mail as mailer
 from ...schemas.auth import (
@@ -16,7 +17,6 @@ from ...schemas.auth import (
     LoginRequest,
     PasswordResetConfirm,
     PasswordResetRequest,
-    ProfileUpdate,
     SignupRequest,
     UserPublic,
     VerifyEmailRequest,
@@ -34,9 +34,7 @@ from ...services.auth_service import (
     start_password_reset,
 )
 from ...services.profile_service import (
-    avatar_url_for_user,
     build_user_public,
-    update_profile,
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
