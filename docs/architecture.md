@@ -403,15 +403,15 @@ The FastAPI app mounts `/assets/` from `static/` and serves
 `index.html` for everything not under `/api/` so React Router owns the
 URL space on the frontend. There is no separate static host.
 
-`render.yaml` documents the env vars and the one-service deploy on
-Render's free web service tier. `backend/.env.example` is the contract
-that needs to match in production.
+`render.yaml` documents the env vars for the API service. The
+live setup is the split deploy (SPA on Vercel, API on Render) —
+see `DEPLOY_SPLIT_VERCEL_RENDER.md`. `backend/.env.example` is the contract that needs to match in production.
 
-### Free-tier expectations
+### Sleep / wake expectations
 
-- Render free web services sleep after ~15 minutes of inactivity. The
-  next request takes several seconds to wake — this is normal, not a
-  bug.
+- A Render service on the *free* compute plan sleeps after 15 minutes
+  without inbound traffic. The next request can take about a minute to wake
+  (Render serves a loading page meanwhile) — normal, not a bug. Paid plans remove it.
 - Neon free Postgres scales to zero when idle. The first query after a
   quiet period takes ~1-2 s longer while the compute warms. The
   connection string stays valid; do not recreate the database.

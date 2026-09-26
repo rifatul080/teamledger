@@ -10,6 +10,7 @@ from . import (
     chat,
     files,
     goals,
+    health,
     invitations,
     milestones,
     notifications,
@@ -41,6 +42,7 @@ for mod in (
     audit,
     activity,
     search,
+    health,
 ):
     if hasattr(mod, "router"):
         api_v1_router.include_router(mod.router)

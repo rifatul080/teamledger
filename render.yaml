@@ -1,25 +1,40 @@
-# Render blueprint — API-only deploy. The frontend is hosted separately
-# (Vercel recommended).
+# Render blueprint — split deploy: FastAPI API on Render, React SPA on Vercel.
+#
+# The browser talks to the Vercel origin only: `frontend/vercel.json`
+# rewrites `/api/:path*` to this service. That keeps cookies first-party
+# and makes the CSRF double-submit check work (the `tl_csrf` cookie is
+# unreadable by JS when the API lives on a different origin). See
+# docs/DEPLOY_SPLIT_VERCEL_RENDER.md.
 #
 # IMPORTANT: Render's Docker service uses the REPO ROOT as the build
 # context regardless of where the Dockerfile lives. The root-level
 # `Dockerfile` has repo-root-relative COPY paths (e.g. `backend/app/...`),
-# so it works. We DO NOT use backend/Dockerfile.api here because its
-# paths (`app/...`, `alembic/...`) assume the context is ./backend/, which
+# so it works. We DO NOT use backend/Dockerfile here because its paths
+# (`app/...`, `alembic/...`) assume the context is ./backend/, which
 # Render never sets for Docker services.
 #
-# The root Dockerfile also builds the SPA stage. For the split deploy
-# (Vercel hosts the SPA), this build step is wasted work but doesn't
-# break anything — the built SPA inside the image is never served
-# because the frontend lives on Vercel.
+# The root Dockerfile also builds the SPA stage. For the split deploy this
+# is wasted work but doesn't break anything — the built SPA inside the
+# image is simply not used by Vercel visitors. Keep it: it means
+# https://<service>.onrender.com keeps working as a same-origin fallback.
 #
 # Apply: render blueprint launch (or `render deploys create` after
 # connecting the repo). Set DATABASE_URL and SECRET_KEY in the dashboard.
+#
+# NOTE: this file is the *intended* shape of the service. If you created
+# the service by hand in the Dashboard (e.g. a service named
+# `teamledger-1` instead of `teamledger-api`), Render will NOT apply these
+# fields — copy the env vars below into the Dashboard by hand.
 
 services:
   - type: web
     name: teamledger-api
-    plan: free
+    # 0.5 CPU / 512 MB. Legacy plan name: `starter`.
+    # PAID ON PURPOSE: free instances spin down after 15 minutes of
+    # inactivity and take ~1 minute to wake up. Any paid compute plan
+    # removes that limitation. See docs/DEPLOY_SPLIT_VERCEL_RENDER.md
+    # § "Never shuts down".
+    plan: "0.5c-512mb"
     runtime: docker
     # Render's Docker build context is the repo root, so the Dockerfile
     # lives at the root too. dockerContext is set explicitly to "." so
@@ -44,10 +59,15 @@ services:
       - key: RESEND_FROM
         value: TeamLedger <noreply@teamledger.app>
       - key: PUBLIC_BASE_URL
-        value: https://teamledger-api.onrender.com  # update to your domain
+        value: https://teamledger-rifat-0046.vercel.app  # SPA origin — email links (verify/reset/invite) point here
       - key: CORS_ALLOWED_ORIGINS
-        value: https://teamledger.vercel.app  # update to your Vercel URL
+        value: https://teamledger-rifat-0046.vercel.app  # only needed if the browser calls this service directly (see docs)
+      # Browsers reach this API same-origin through the Vercel rewrite, so
+      # "lax" is both correct and stronger than "none". Only set "none" if
+      # you switch to direct cross-origin calls (VITE_API_BASE_URL set and
+      # no rewrite) — "none" requires HTTPS and is blocked by browsers that
+      # block third-party cookies.
       - key: COOKIE_SAMESITE
-        value: none  # required for cross-origin cookies (Vercel -> Render)
+        value: lax
       - key: DEFAULT_TIMEZONE
         value: UTC

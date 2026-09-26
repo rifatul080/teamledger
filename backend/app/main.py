@@ -14,6 +14,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.routing import compile_path
 
 from .api.v1 import api_v1_router
 from .core.clock import SystemClock
@@ -161,39 +162,11 @@ def create_app() -> FastAPI:
 
     app.include_router(api_v1_router)
 
-    # ----- SPA static fallback -----
-    # If a built SPA exists at ./static (the docker path), serve it from here.
-    # Anything not under /api/ falls through to the SPA's index.html so React
-    # Router owns the URL space on the frontend.
-    static_dir = (Path(__file__).parent.parent / "static").resolve()
-    if static_dir.exists() and (static_dir / "index.html").exists():
-        from starlette.staticfiles import StaticFiles
-
-        app.mount(
-            "/assets",
-            StaticFiles(directory=str(static_dir / "assets")),
-            name="spa-assets",
-        )
-
-        from starlette.responses import FileResponse
-
-        @app.get("/", include_in_schema=False)
-        async def spa_index():
-            return FileResponse(static_dir / "index.html")
-
-        @app.get("/{full_path:path}", include_in_schema=False)
-        async def spa_spa_catch(full_path: str):
-            # Don't shadow real API routes or static assets.
-            if full_path.startswith("api/") or full_path.startswith("assets/"):
-                return JSONResponse({"error": "not found"}, status_code=404)
-            file_path = static_dir / full_path
-            if file_path.is_file():
-                return FileResponse(file_path)
-            return FileResponse(static_dir / "index.html")
-    else:
-        # Dev mode — the SPA is served by Vite (which proxies /api to this app).
-        pass
-
+    # ----- SEO endpoints -----
+    # These MUST be registered before the SPA catch-all below: the catch-all
+    # is `/{full_path:path}`, which matches every remaining path, so anything
+    # registered after it is unreachable whenever a built SPA exists at
+    # ./static — which is always the case inside the Docker image.
     @app.get("/robots.txt", include_in_schema=False)
     async def robots_txt():
         from starlette.responses import PlainTextResponse
@@ -230,6 +203,72 @@ def create_app() -> FastAPI:
             )
         xml.append("</urlset>")
         return _Resp("\n".join(xml), media_type="application/xml")
+
+    # ----- SPA static fallback -----
+    # If a built SPA exists at ./static (the docker path), serve it from here.
+    # Anything not under /api/ falls through to the SPA's index.html so React
+    # Router owns the URL space on the frontend.
+    static_dir = (Path(__file__).parent.parent / "static").resolve()
+    if static_dir.exists() and (static_dir / "index.html").exists():
+        from starlette.staticfiles import StaticFiles
+
+        app.mount(
+            "/assets",
+            StaticFiles(directory=str(static_dir / "assets")),
+            name="spa-assets",
+        )
+
+        from starlette.responses import FileResponse
+
+        # Path matchers for the real API routes, derived from the generated
+        # OpenAPI schema. The catch-all route below matches *every* path,
+        # which would otherwise swallow the 405 that Starlette raises for a
+        # wrong-method call to a valid API path (it would answer 404
+        # instead). Re-deriving that decision here keeps the documented
+        # status codes and error envelope intact — see
+        # tests/api/test_security_headers.py::test_error_envelope_shape.
+        # (Route objects are opaque in this FastAPI build — included routers
+        # are not flattened — so the schema is the reliable source.)
+        api_path_matchers: list[tuple[Any, set[str]]] = []
+        for api_path, api_ops in app.openapi().get("paths", {}).items():
+            if not api_path.startswith("/api/"):
+                continue
+            api_methods = {
+                m.upper()
+                for m in api_ops
+                if m in {"get", "post", "put", "patch", "delete", "head", "options"}
+            }
+            if api_methods:
+                regex, _, _ = compile_path(api_path)
+                api_path_matchers.append((regex, api_methods))
+
+        @app.get("/", include_in_schema=False)
+        async def spa_index():
+            return FileResponse(static_dir / "index.html")
+
+        @app.get("/{full_path:path}", include_in_schema=False)
+        async def spa_spa_catch(full_path: str):
+            # Don't shadow static assets.
+            if full_path.startswith("assets/"):
+                return JSONResponse({"error": "not found"}, status_code=404)
+            # Never serve the SPA shell for API paths: a known path with the
+            # wrong method is a 405, anything else is a 404.
+            if full_path.startswith("api/"):
+                for regex, methods in api_path_matchers:
+                    if regex.match("/" + full_path):
+                        raise StarletteHTTPException(
+                            status_code=405,
+                            detail="Method not allowed for this endpoint.",
+                            headers={"Allow": ", ".join(sorted(methods))},
+                        )
+                return JSONResponse({"error": "not found"}, status_code=404)
+            file_path = static_dir / full_path
+            if file_path.is_file():
+                return FileResponse(file_path)
+            return FileResponse(static_dir / "index.html")
+    else:
+        # Dev mode — the SPA is served by Vite (which proxies /api to this app).
+        pass
 
     return app
 

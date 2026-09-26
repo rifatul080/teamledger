@@ -139,18 +139,18 @@ The system is sized for **10–50 active researchers** per server:
 
 ## v2: free-tier production deploy
 
-This round ships a one-service deploy that runs the FastAPI process and serves the built React SPA from the same origin. No separate static host.
+This round ships a one-service deploy that runs the FastAPI process and serves the built React SPA from the same origin. No separate static host. The same image also supports the split layout (SPA on Vercel, API on Render) — see `DEPLOY_SPLIT_VERCEL_RENDER.md`; the live deployment currently uses the split layout.
 
 ### Provisioning (one-time, owner steps)
 
 1. **Neon** at https://neon.tech: free Postgres, scales to zero. Create a project named `teamledger`, copy the connection string (it looks like `postgresql://USER:PASS@ep-xxx.us-east-2.aws.neon.tech/neondb?sslmode=require`).
-2. **Render** at https://render.com: connect the GitHub repo, choose "Web Service" from this repo, point at `backend/Dockerfile`. Set `DATABASE_URL` to the Neon string above. Pick the Free plan.
+2. **Render** at https://render.com: connect the GitHub repo, choose "Web Service" from this repo, and set the **Dockerfile Path** to `./Dockerfile` (repo root). Render always uses the repo root as the Docker build context, so a `backend/...` Dockerfile path fails — see `DEPLOY_SPLIT_VERCEL_RENDER.md`. Set `DATABASE_URL` to the Neon string above. Choose a paid compute plan (`0.5c-512mb`, legacy name *Starter*): Free instances sleep on idle, which is the behavior most often mistaken for an outage.
 3. **Resend** (optional) at https://resend.com: free tier 100 emails/day. Verify a domain or use the sandbox sender, then paste the API key as `RESEND_API_KEY` in Render's env vars. Without a key the app keeps working - emails just print to the server log.
 4. (Optional) **Custom domain**: buy one, set `PUBLIC_BASE_URL`, add the DNS CNAME Render gives you.
 
 ### Expected free-tier behaviors
 
-- **Render free web service sleeps after ~15 min idle.** The next request takes several seconds while it wakes; this is normal, not a bug.
+- **Render free web service sleeps after 15 min without inbound traffic.** Waking takes about a minute, and Render serves a loading page to the browser meanwhile; this is normal, not a bug. Any paid compute plan removes the behavior.
 - **Neon free Postgres scales to zero when idle.** Same pattern - first query after a quiet period takes ~1-2s longer while the compute warms. The connection string stays valid.
 - **Storage is local to the Render service.** Avatars and files do NOT survive a redeploy that wipes the disk. For real production install, swap `STORAGE_BACKEND=local` for an S3-compatible backend.
 
