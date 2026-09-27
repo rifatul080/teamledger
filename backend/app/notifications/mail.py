@@ -200,6 +200,48 @@ def send_password_reset_email(*, to: str, token: str, settings) -> dict:
     return _send(to=to, subject=subject, body=body, settings=settings, kind="reset")
 
 
+def send_task_assignment_email(
+    *,
+    to: str,
+    assignee_name: str,
+    assigner_name: str,
+    task_title: str,
+    project_name: str,
+    due_date: str | None,
+    settings,
+) -> dict:
+    """Tell someone a task landed on their plate (with the deadline)."""
+    due_line = f"\n\nDeadline: {due_date}" if due_date else ""
+    subject = f"{assigner_name} assigned you a task in TeamLedger"
+    body = (
+        f"Hi {assignee_name},\n\n"
+        f"{assigner_name} assigned you \"{task_title}\" in the project "
+        f"\"{project_name}\".{due_line}\n\n"
+        "Open TeamLedger to view the details and update its status."
+    )
+    return _send(to=to, subject=subject, body=body, settings=settings, kind="task_assigned")
+
+
+def send_mention_email(
+    *,
+    to: str,
+    recipient_name: str,
+    sender_name: str,
+    team_name: str,
+    snippet: str,
+    settings,
+) -> dict:
+    """Tell someone they were @mentioned in team chat."""
+    subject = f"{sender_name} mentioned you in {team_name} (TeamLedger)"
+    body = (
+        f"Hi {recipient_name},\n\n"
+        f"{sender_name} mentioned you in the team chat for \"{team_name}\":\n\n"
+        f"  {snippet}\n\n"
+        "Open TeamLedger to reply."
+    )
+    return _send(to=to, subject=subject, body=body, settings=settings, kind="mention")
+
+
 def _send(*, to: str, subject: str, body: str, settings, kind: str) -> dict:
     """Pluggable backend switch."""
     backend = settings.mail_backend

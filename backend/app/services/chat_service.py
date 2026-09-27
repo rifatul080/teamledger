@@ -29,16 +29,27 @@ def next_seq(db: Session, team_id: str) -> int:
 
 
 def parse_mentions(body: str, team_member_names: dict[str, str]) -> list[str]:
-    """Resolve @display_name patterns to user_ids. Names are matched case-insensitively."""
+    """Resolve ``@name`` patterns to user_ids (case-insensitive).
+
+    Display names may contain spaces ("Ada Lovelace"), so a greedy regex would
+    swallow the rest of the sentence. Instead we take the text after each "@"
+    and try progressively shorter prefixes, longest first — so ``@Ada Lovelace
+    can you look?`` resolves to Ada, and ``@Ada`` still works.
+    """
     import re
 
+    if not body or not team_member_names:
+        return []
+    by_lower = {n.strip().lower(): uid for uid, n in team_member_names.items() if n and n.strip()}
     out: list[str] = []
-    name_to_uid = {n.lower(): uid for uid, n in team_member_names.items()}
-    for match in re.finditer(r"@([A-Za-z0-9_\- ]{1,60})", body):
-        key = match.group(1).strip().lower()
-        uid = name_to_uid.get(key)
-        if uid and uid not in out:
-            out.append(uid)
+    for match in re.finditer(r"@([A-Za-z0-9_][A-Za-z0-9_\- ]*)", body):
+        tail = match.group(1)
+        for end in range(len(tail), 0, -1):
+            uid = by_lower.get(tail[:end].strip().lower())
+            if uid is not None:
+                if uid not in out:
+                    out.append(uid)
+                break
     return out
 
 

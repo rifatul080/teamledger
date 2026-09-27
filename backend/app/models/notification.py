@@ -10,20 +10,33 @@ from sqlalchemy.orm import Mapped, mapped_column
 from ..db.base import Base, TimestampMixin
 
 NotifType = Literal[
+    # legacy scheduler vocabulary (kept for existing rows)
     "assignment",
     "review_result",
     "mention",
     "deadline_3d",
     "deadline_1d",
     "overdue",
+    # activity vocabulary — must stay in sync with the frontend ActivityKind
+    # union, because the unread-by-kind counters are keyed on this column.
+    "task_assigned",
+    "task_reviewed",
+    "milestone",
+    "member",
+    "system",
 ]
+
+NOTIF_TYPES_SQL = (
+    "'assignment','review_result','mention','deadline_3d','deadline_1d','overdue',"
+    "'task_assigned','task_reviewed','milestone','member','system'"
+)
 
 
 class Notification(Base, TimestampMixin):
     __tablename__ = "notifications"
     __table_args__ = (
         CheckConstraint(
-            "type in ('assignment','review_result','mention','deadline_3d','deadline_1d','overdue')",
+            f"type in ({NOTIF_TYPES_SQL})",
             name="notification_type_check",
         ),
     )

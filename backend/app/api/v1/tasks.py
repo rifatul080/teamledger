@@ -11,6 +11,7 @@ from ...models.milestone import Milestone
 from ...models.project import Project
 from ...models.task import Task
 from ...models.user import User
+from ...notifications.triggers import notify_task_assigned
 from ...schemas.tasks import (
     TaskCreate,
     TaskPropose,
@@ -82,6 +83,15 @@ def create_task(
         subject_kind="task",
         subject_id=t.id,
         payload={"assignee": t.assignee_user_id},
+    )
+    notify_task_assigned(
+        db,
+        task=t,
+        actor=user,
+        assignee=assignee,
+        team_id=proj.team_id,
+        project_id=proj.id,
+        project_name=proj.name,
     )
     db.commit()
     return TaskRead.model_validate(t)
@@ -166,6 +176,7 @@ def update_task(
         if t.assignee_user_id != user.id and payload.status is not None:
             # members can only update status of their own tasks.
             raise forbidden(code="task.not_assignee")
+    previous_assignee_id = t.assignee_user_id
     task_service.update_task(
         db,
         t,
@@ -189,6 +200,24 @@ def update_task(
         subject_kind="task",
         subject_id=t.id,
     )
+    # Reassignment: only the new owner needs to hear about it.
+    if (
+        payload.assignee_user_id
+        and payload.assignee_user_id != previous_assignee_id
+        and payload.assignee_user_id != user.id
+    ):
+        new_assignee = db.get(User, payload.assignee_user_id)
+        if new_assignee is None:
+            raise not_found(code="user.not_found")
+        notify_task_assigned(
+            db,
+            task=t,
+            actor=user,
+            assignee=new_assignee,
+            team_id=proj.team_id,
+            project_id=proj.id,
+            project_name=proj.name,
+        )
     db.commit()
     return TaskRead.model_validate(t)
 

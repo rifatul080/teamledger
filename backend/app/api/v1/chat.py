@@ -17,6 +17,7 @@ from ...db.session import get_sessionmaker
 from ...models.message import ChatMessage
 from ...models.team import Team
 from ...models.user import User
+from ...notifications.triggers import notify_mentions
 from ...realtime.hub import Connection, hub
 from ...schemas.chat import MessageEdit, MessageRead, MessageSend
 from ...services import chat_service, team_service
@@ -106,6 +107,14 @@ def send_message(
         body=payload.body,
         attachment_version_ids=payload.attachment_version_ids,
         member_user_ids=name_map,
+    )
+    notify_mentions(
+        db,
+        team_id=team_id,
+        team_name=team.name,
+        sender=user,
+        message=msg,
+        mentioned_user_ids=[m for m in (msg.mentions or "").split(",") if m],
     )
     db.commit()
     # Broadcast in background
@@ -267,6 +276,14 @@ async def chat_socket(websocket: WebSocket, team_id: str) -> None:
                         attachment_version_ids=data.get("attachment_version_ids"),
                         idempotency_key=data.get("client_msg_id"),
                         member_user_ids=name_map,
+                    )
+                    notify_mentions(
+                        db,
+                        team_id=team_id,
+                        team_name=t.name,
+                        sender=user,
+                        message=msg,
+                        mentioned_user_ids=[m for m in (msg.mentions or "").split(",") if m],
                     )
                     db.commit()
                 payload = _serialize(msg)

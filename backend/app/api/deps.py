@@ -119,6 +119,13 @@ def audit(
     from ..models.audit import AuditEvent
 
     now = when or datetime.now(tz=UTC)
+    data = dict(payload or {})
+    if "title" not in data:
+        # The activity feed renders "{action} {title}". Rather than making every
+        # call site remember to pass one, resolve it from the subject row.
+        resolved = _subject_title(db, subject_kind, subject_id)
+        if resolved:
+            data["title"] = resolved
     event = AuditEvent(
         id=new_id(),
         actor_user_id=actor_user_id,
@@ -127,11 +134,39 @@ def audit(
         action=action,
         subject_kind=subject_kind,
         subject_id=subject_id,
-        payload=json.dumps(payload) if payload else None,
+        payload=json.dumps(data) if data else None,
         at=now,
         created_at=now,
     )
     db.add(event)
+
+
+# Subject kinds that carry a human label, mapped to (module, class, attr).
+_SUBJECT_LABEL: dict[str, tuple[str, str, str]] = {
+    "task": ("app.models.task", "Task", "title"),
+    "goal": ("app.models.goal", "Goal", "title"),
+    "milestone": ("app.models.milestone", "Milestone", "title"),
+    "project": ("app.models.project", "Project", "name"),
+    "team": ("app.models.team", "Team", "name"),
+}
+
+
+def _subject_title(db: Session, subject_kind: str, subject_id: str) -> str | None:
+    """Best-effort label for an audit subject; never raises."""
+    spec = _SUBJECT_LABEL.get(subject_kind)
+    if spec is None:
+        return None
+    module_name, class_name, attr = spec
+    try:
+        import importlib
+
+        model = getattr(importlib.import_module(module_name), class_name)
+        row = db.get(model, subject_id)
+        if row is None:
+            return None
+        return getattr(row, attr, None)
+    except Exception:  # pragma: no cover - defensive; audit must never fail
+        return None
 
 
 def is_leader(membership: Membership) -> bool:

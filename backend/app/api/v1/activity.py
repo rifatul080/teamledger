@@ -21,34 +21,54 @@ from ...models.user import User
 router = APIRouter()
 
 
-# Mapping of action -> activity kind, title, and href template.
+# Mapping of audit action -> activity kind, title, and href template.
+# Keys must match the ``action=`` strings actually written by the routers and
+# services (grep `action="` under app/api and app/services).
 _ACTIVITY_KIND: dict[str, tuple[str, str, str]] = {
-    "task.created": ("task_assigned", "{title}", "/projects/{project_id}?task={task_id}"),
-    "task.submitted": ("task_reviewed", "submitted {title}", "/projects/{project_id}?task={task_id}"),
-    "task.accepted": ("task_reviewed", "{title} accepted", "/projects/{project_id}?task={task_id}"),
-    "task.rejected": ("task_reviewed", "{title} needs rework", "/projects/{project_id}?task={task_id}"),
-    "task.split": ("task_assigned", "{title} split", "/projects/{project_id}?task={task_id}"),
-    "milestone.completed": ("milestone", "{title}", "/projects/{project_id}"),
-    "milestone.uncompleted": ("milestone", "{title}", "/projects/{project_id}"),
-    "project.finalize": ("system", "{title} contribution record finalized", "/projects/{project_id}/scoring"),
-    "score.adjustment_add": ("system", "+/- adjustment on {title}", "/projects/{project_id}/scoring"),
-    "author.order_finalize": ("system", "{title} author order finalized", "/projects/{project_id}/scoring"),
+    # --- tasks -------------------------------------------------------------
+    "task.create": ("task_assigned", "assigned {title}", "/projects/{project_id}?task={task_id}"),
+    "task.propose": ("task_assigned", "proposed {title}", "/projects/{project_id}?task={task_id}"),
+    "task.update": ("task_assigned", "updated {title}", "/projects/{project_id}?task={task_id}"),
+    "task.split": ("task_assigned", "split {title} into a new task", "/projects/{project_id}"),
+    "task.submit": ("task_reviewed", "submitted {title} for review", "/projects/{project_id}?task={task_id}"),
+    "task.review": ("task_reviewed", "reviewed {title}", "/projects/{project_id}?task={task_id}"),
+    # --- goals & milestones -------------------------------------------------
+    "goal.create": ("milestone", "created goal {title}", "/projects/{project_id}"),
+    "goal.update": ("milestone", "updated goal {title}", "/projects/{project_id}"),
+    "goal.delete": ("milestone", "deleted goal {title}", "/projects/{project_id}"),
+    "milestone.create": ("milestone", "added milestone {title}", "/projects/{project_id}"),
+    "milestone.update": ("milestone", "updated milestone {title}", "/projects/{project_id}"),
+    "milestone.delete": ("milestone", "deleted milestone {title}", "/projects/{project_id}"),
+    # --- membership ---------------------------------------------------------
+    "team.create": ("member", "created the team", "/teams/{team_id}"),
+    "team.member_add": ("member", "added a member", "/teams/{team_id}"),
+    "team.member_remove": ("member", "removed a member", "/teams/{team_id}"),
+    "team.transfer_leader": ("member", "transferred leadership", "/teams/{team_id}"),
+    "team.archive": ("member", "archived the team", "/teams/{team_id}"),
     "invitation.create": ("mention", "invited {email}", "/teams/{team_id}"),
     "invitation.revoke": ("mention", "revoked {email}", "/teams/{team_id}"),
-    "team.member_remove": ("mention", "removed a member", "/teams/{team_id}"),
-    "team.transfer_leader": ("mention", "transferred leadership", "/teams/{team_id}"),
-    "team.archive": ("mention", "archived the team", "/teams/{team_id}"),
-    "chat.message": ("mention", "posted in chat", "/teams/{team_id}/chat?msg={message_id}"),
-    "chat.reaction": ("reaction", "reacted in chat", "/teams/{team_id}/chat?msg={message_id}"),
-    "chat.thread_reply": ("thread_reply", "replied in a thread", "/teams/{team_id}/chat?msg={message_id}"),
+    "invitation.accept": ("member", "{email} joined the team", "/teams/{team_id}"),
+    # --- projects, scoring, schedule ---------------------------------------
+    "project.create": ("system", "created project {title}", "/projects/{project_id}"),
+    "project.update": ("system", "updated project {title}", "/projects/{project_id}"),
+    "project.set_participants": ("member", "updated the contributors on {title}", "/projects/{project_id}"),
+    "project.multipliers_update": ("system", "re-weighted {title}", "/projects/{project_id}"),
+    "project.timeliness_update": ("system", "updated the timeline for {title}", "/projects/{project_id}"),
+    "score.adjustment_add": ("system", "adjusted {title}'s score", "/projects/{project_id}/scoring"),
+    "author_order.finalize": ("system", "finalized the author order for {title}", "/projects/{project_id}/scoring"),
+    "schedule.set_plan": ("system", "set a weekly plan", "/teams/{team_id}"),
+    # --- account ------------------------------------------------------------
+    "auth.signup": ("system", "joined TeamLedger", "/dashboard"),
+    "auth.verify_complete": ("system", "verified their email", "/dashboard"),
 }
 
 
-def _project(user: User, events: list[AuditEvent]) -> list[dict]:
+def _project(db: Session, user: User, events: list[AuditEvent]) -> list[dict]:
     """Map audit events to activity items for the home/team feed."""
     import json as _json
 
     out = []
+    actor_names = _actor_names(db, events)
     for ev in events:
         kind, body_tmpl, href_tmpl = _ACTIVITY_KIND.get(
             ev.action, ("system", ev.action.replace(".", " "), "/dashboard")
@@ -92,10 +112,14 @@ def _project(user: User, events: list[AuditEvent]) -> list[dict]:
                 "kind": kind,
                 "team_id": ev.team_id,
                 "project_id": ev.project_id,
-                "task_id": payload.get("task_id"),
-                "message_id": payload.get("message_id"),
+                "task_id": payload.get("task_id")
+                or (ev.subject_id if ev.subject_kind == "task" else None),
+                "message_id": payload.get("message_id")
+                or (ev.subject_id if ev.subject_kind == "message" else None),
                 "thread_root_id": payload.get("thread_root_id"),
                 "actor_user_id": ev.actor_user_id,
+                "actor_name": actor_names.get(ev.actor_user_id or ""),
+                "self": ev.actor_user_id == user.id,
                 "body": body,
                 "href": href,
                 "read": False,
@@ -103,6 +127,17 @@ def _project(user: User, events: list[AuditEvent]) -> list[dict]:
             }
         )
     return out
+
+
+def _actor_names(db: Session, events: list[AuditEvent]) -> dict[str, str]:
+    """Display names for the actors in this page of the feed (one query)."""
+    ids = {ev.actor_user_id for ev in events if ev.actor_user_id}
+    if not ids:
+        return {}
+    return {
+        u.id: u.display_name
+        for u in db.query(User).filter(User.id.in_(ids)).all()
+    }
 
 
 @router.get("/activity")
@@ -126,7 +161,7 @@ def activity_all(
         .limit(limit)
         .all()
     )
-    items = _project(user, rows)
+    items = _project(db, user, rows)
     return _unread_summary(db, user.id, items)
 
 
@@ -152,7 +187,7 @@ def activity_team(
         .limit(limit)
         .all()
     )
-    items = _project(user, rows)
+    items = _project(db, user, rows)
     return _unread_summary(db, user.id, items)
 
 
