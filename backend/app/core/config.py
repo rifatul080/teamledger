@@ -23,6 +23,25 @@ def _normalize_database_url(url: str) -> str:
     return url
 
 
+def redact_database_url(url: str) -> str:
+    """Return ``url`` with its password masked, so it is safe to log.
+
+    Startup diagnostics need to name the database they are complaining
+    about, but ``DATABASE_URL`` routinely carries a password and Render
+    prints the boot log to anyone with dashboard access. Masking keeps the
+    useful part (driver, host, database name) and drops the secret.
+
+    Never raises: an unparsable URL is reported as such rather than echoed,
+    since a malformed value can still contain a credential.
+    """
+    from sqlalchemy.engine import make_url
+
+    try:
+        return make_url(url).render_as_string(hide_password=True)
+    except Exception:
+        return "<unparsable database url>"
+
+
 class Settings(BaseSettings):
     """Settings loaded from environment / .env file."""
 

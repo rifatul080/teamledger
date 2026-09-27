@@ -50,11 +50,13 @@ def _migration_revision(db: Session) -> str | None:
 
 
 @router.get("/db")
-def health_db(db: Session = Depends(get_db)) -> dict[str, str | None]:
+def health_db(db: Session = Depends(get_db)) -> dict[str, str | bool | None]:
     """Readiness probe — 503 when the database cannot be reached.
 
-    Safe to expose publicly: it reports only a status flag and the applied
-    migration revision, never connection details.
+    Safe to expose publicly: it reports the status, the applied migration
+    revision and the driver name, never connection details. ``driver`` is the
+    one field worth watching — ``sqlite`` on a PaaS means ephemeral storage,
+    so data is lost on the next deploy.
     """
     try:
         db.execute(text("SELECT 1"))
@@ -65,9 +67,12 @@ def health_db(db: Session = Depends(get_db)) -> dict[str, str | None]:
             message="Database is not reachable.",
             details={"error": type(exc).__name__},
         ) from None
+    driver = db.bind.dialect.name if db.bind is not None else "unknown"
     return {
         "status": "ok",
         "service": SERVICE_NAME,
         "database": "ok",
+        "driver": driver,
+        "ephemeral": driver == "sqlite",
         "migration": _migration_revision(db),
     }

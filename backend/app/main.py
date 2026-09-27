@@ -13,13 +13,14 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy.engine import Engine
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import FileResponse, PlainTextResponse, Response
 from starlette.routing import compile_path
 
 from .api.v1 import api_v1_router
 from .core.clock import SystemClock
-from .core.config import get_settings
+from .core.config import get_settings, redact_database_url
 from .core.errors import AppError
 from .db.session import get_engine
 from .models import credit  # noqa: F401  - register CRediT categories
@@ -30,8 +31,44 @@ log = logging.getLogger("teamledger")
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # warm up engine, seed CRediT categories if empty
-    get_engine()
+    engine = get_engine()
+    _warn_on_ephemeral_db(engine)
     yield
+
+
+def ephemeral_db_warning(engine: Engine) -> str | None:
+    """Operator-facing warning when the database will not survive a restart.
+
+    A SQLite file inside a container (Render, Fly, most PaaS free tiers) lives
+    on ephemeral storage: every deploy, restart, or spin-down/rebuild wipes
+    every account, team and message. That failure is invisible until someone
+    loses work, so it is computed here, logged at boot, and surfaced on
+    ``/health/db``.
+
+    Returns ``None`` when the setup is fine, so callers (and tests) do not
+    have to know about logging.
+    """
+    if engine.dialect.name != "sqlite":
+        return None
+    settings = get_settings()
+    if settings.app_env != "production":
+        return None
+    return (
+        f"DATABASE_URL is {redact_database_url(settings.database_url)} — this deployment "
+        "stores data on ephemeral storage and WILL lose it on the next deploy or "
+        "restart. Point DATABASE_URL at Postgres (Neon/Render) for production."
+    )
+
+
+def _warn_on_ephemeral_db(engine: Engine) -> None:
+    message = ephemeral_db_warning(engine)
+    if message:
+        log.error(message)
+    elif engine.dialect.name == "sqlite":
+        log.info(
+            "Using SQLite (%s) — fine for development.",
+            redact_database_url(get_settings().database_url),
+        )
 
 
 def create_app() -> FastAPI:
