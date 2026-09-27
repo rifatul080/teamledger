@@ -1,0 +1,43 @@
+name: heartbeat-a
+
+# Self-sustaining keep-alive chain (paired with heartbeat-b.yml):
+#
+#   push (this file) -> heartbeat-a -> heartbeat-b -> heartbeat-a -> ...
+#
+# Each run waits ~5 min, pings the Render API, and its completion
+# triggers the partner workflow via `workflow_run`. The chain keeps
+# beating even when pings fail (workflow_run fires on any conclusion),
+# so a downed backend delays pings but never kills the keep-alive.
+# This exists because GitHub's plain `schedule` fired only twice in
+# 6.5 h (see uptime.yml). Repo is public => runs are free.
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/heartbeat-a.yml"
+  workflow_run:
+    workflows: ["heartbeat-b"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  beat:
+    name: wait then ping
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Wait ~5 minutes
+        run: sleep 290
+      - name: Ping Render /api/v1/health/db
+        run: |
+          code=$(curl -sS --fail-with-body --retry 3 --retry-delay 20 \
+            --retry-all-errors -o /tmp/health.json -w '%{http_code}' \
+            --max-time 60 https://teamledger-1.onrender.com/api/v1/health/db \
+            || true)
+          echo "HTTP $code"
+          cat /tmp/health.json 2>/dev/null || true
+          echo
+          test "$code" = "200" || exit 1
+          grep -q '"database":"ok"' /tmp/health.json

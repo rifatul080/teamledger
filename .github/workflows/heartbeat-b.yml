@@ -1,0 +1,33 @@
+name: heartbeat-b
+
+# Second half of the keep-alive chain — see heartbeat-a.yml for the
+# design. This workflow has no bootstrap trigger of its own; it starts
+# when heartbeat-a completes, and its own completion re-triggers
+# heartbeat-a, alternating forever.
+on:
+  workflow_run:
+    workflows: ["heartbeat-a"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  beat:
+    name: wait then ping
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Wait ~5 minutes
+        run: sleep 290
+      - name: Ping Render /api/v1/health/db
+        run: |
+          code=$(curl -sS --fail-with-body --retry 3 --retry-delay 20 \
+            --retry-all-errors -o /tmp/health.json -w '%{http_code}' \
+            --max-time 60 https://teamledger-1.onrender.com/api/v1/health/db \
+            || true)
+          echo "HTTP $code"
+          cat /tmp/health.json 2>/dev/null || true
+          echo
+          test "$code" = "200" || exit 1
+          grep -q '"database":"ok"' /tmp/health.json
