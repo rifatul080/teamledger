@@ -56,7 +56,10 @@ def providers(settings: Settings | None = None) -> dict[str, OAuthProvider]:
             client_id=s.google_client_id,
             client_secret=s.google_client_secret,
             authorize_url="https://accounts.google.com/o/oauth2/v2/auth",
-            token_url="https://oauth2.googleapis.com/token",
+            # These are public, well-known endpoint URLs, not credentials —
+            # B106's "looks like a password" heuristic fires on `token_url=`.
+            # The actual secrets (client_id/client_secret) come from Settings.
+            token_url="https://oauth2.googleapis.com/token",  # nosec B106
             profile_url="https://www.googleapis.com/oauth2/v3/userinfo",
             scopes="openid email profile",
         ),
@@ -66,7 +69,7 @@ def providers(settings: Settings | None = None) -> dict[str, OAuthProvider]:
             client_id=s.facebook_client_id,
             client_secret=s.facebook_client_secret,
             authorize_url="https://www.facebook.com/v20.0/dialog/oauth",
-            token_url="https://graph.facebook.com/v20.0/oauth/access_token",
+            token_url="https://graph.facebook.com/v20.0/oauth/access_token",  # nosec B106
             profile_url="https://graph.facebook.com/me?fields=id,name,email",
             scopes="email,public_profile",
         ),
