@@ -1,10 +1,11 @@
 name: uptime
 
 on:
+  # Render Free spins down after 15 min without inbound traffic; a ping
+  # every 5 min keeps the instance (and Neon, via health/db SELECT 1)
+  # awake. Repo is public => scheduled runs are free. (Re-registered
+  # 2026-09-27 to refresh GitHub's schedule index after sparse firing.)
   schedule:
-    # Render Free spins down after 15 min without inbound traffic; a ping
-    # every 5 min keeps the instance (and Neon, via health/db SELECT 1)
-    # awake. Repo is public => scheduled runs are free.
     - cron: "*/5 * * * *"
   workflow_dispatch:
 
