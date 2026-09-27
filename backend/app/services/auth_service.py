@@ -1,4 +1,4 @@
-﻿"""Auth service: signup, login, refresh, password reset."""
+"""Auth service: signup, login, refresh, password reset."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -121,7 +121,7 @@ def rotate_refresh(db: Session, refresh_token: str, *, ip: str | None = None, us
     if session is None:
         raise unauthorized(code="auth.refresh_invalid", message="Refresh token invalid.")
     if session.revoked_at is not None or session.used_at is not None:
-        # Reuse detected â€” revoke the whole family.
+        # Reuse detected — revoke the whole family.
         db.query(RefreshSession).filter(RefreshSession.family_id == session.family_id).update(
             {RefreshSession.revoked_at: datetime.now(tz=UTC)}
         )
@@ -239,7 +239,7 @@ def change_password(db: Session, user: User, *, current: str, new: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# v2 — email verification + institution lookup
+# v2 � email verification + institution lookup
 # ---------------------------------------------------------------------------
 
 VERIFICATION_TTL_HOURS = 24
@@ -262,7 +262,7 @@ def derive_institution_hint_from_email(email: str) -> str | None:
     """Best-effort guess at an institution name from the email domain.
 
     The frontend uses this to pre-fill the institution field on signup. We do
-    NOT register a third-party WHOIS or domain lookup — just match common
+    NOT register a third-party WHOIS or domain lookup � just match common
     academic patterns (academic TLDs or domain tokens). Always returns None
     for non-academic addresses; the user can fill the field manually.
     """

@@ -79,6 +79,17 @@ class Settings(BaseSettings):
     # Public URL the mailer uses to build verification / reset links.
     public_base_url: str = "http://localhost:5173"
 
+    # Social sign-in (OAuth 2.0 authorization-code flow). Leave the client id
+    # empty to keep a provider disabled — the UI hides buttons for providers
+    # that /auth/oauth/providers reports as unconfigured.
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    facebook_client_id: str = ""
+    facebook_client_secret: str = ""
+    # Origin that serves the API (the redirect URI is built from it). Defaults
+    # to public_base_url, which is correct for same-origin deploys.
+    oauth_redirect_base: str = ""
+
     @property
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.cors_allowed_origins.split(",") if o.strip()]

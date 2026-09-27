@@ -15,6 +15,7 @@ from . import (
     milestones,
     notes,
     notifications,
+    oauth,
     projects,
     schedules,
     scoring,
@@ -28,6 +29,7 @@ api_v1_router = APIRouter(prefix="/api/v1")
 
 for mod in (
     auth,
+    oauth,
     users,
     teams,
     invitations,
