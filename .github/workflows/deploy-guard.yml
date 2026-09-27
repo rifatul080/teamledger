@@ -1,0 +1,73 @@
+name: deploy-guard
+
+# Guards the one production mistake that is invisible until it destroys data:
+# a Render container running SQLite instead of Postgres. SQLite lives on
+# ephemeral storage, so every deploy/restart wipes all accounts and content —
+# while the app happily keeps serving 200s and accepting new signups.
+#
+# /api/v1/health/db reports the driver (added in dacbeda) precisely so this
+# can be checked from CI instead of from memory.
+
+on:
+  push:
+    branches: [main]
+  # Daily, so a service that is reconfigured (or quietly rolled back) outside
+  # of a push is still caught. Off-the-hour minute to avoid the cron stampede.
+  schedule:
+    - cron: "23 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  persistent-database:
+    name: production database is persistent
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      HEALTH_URL: https://teamledger-1.onrender.com/api/v1/health/db
+    steps:
+      - name: Wait for Render to serve the new build
+        run: |
+          # A push lands before Render finishes deploying, so the first few
+          # attempts legitimately 404/502. Retry rather than alert on a race.
+          for i in $(seq 1 10); do
+            code=$(curl -sS -o /tmp/health.json -w '%{http_code}' \
+              --max-time 60 "$HEALTH_URL" || true)
+            echo "attempt $i -> HTTP ${code:-none}"
+            [ "$code" = "200" ] && break
+            sleep 30
+          done
+          test "${code:-none}" = "200"
+
+      - name: Read the database report
+        run: |
+          cat /tmp/health.json
+          echo
+          python3 - <<'PY' > /tmp/report.env
+          import json, pathlib
+
+          body = json.loads(pathlib.Path("/tmp/health.json").read_text())
+          print(f"DRIVER={body.get('driver', 'unknown')}")
+          print(f"EPHEMERAL={str(bool(body.get('ephemeral'))).lower()}")
+          print(f"MIGRATION={body.get('migration') or 'none'}")
+          PY
+          cat /tmp/report.env
+          cat /tmp/report.env >> "$GITHUB_ENV"
+
+      - name: Fail if the production database is disposable
+        run: |
+          if [ "$DRIVER" = "sqlite" ]; then
+            echo "::error title=Disposable production database::The live service is running SQLite. Every deploy, restart or spin-down permanently deletes all accounts, teams, goals and messages. /api/v1/health/db reported {\"driver\":\"$DRIVER\",\"ephemeral\":$EPHEMERAL}."
+            echo
+            echo "Fix (about 5 minutes, no code change needed):"
+            echo "  1. Create a free Postgres project at https://neon.tech and copy its connection string."
+            echo "  2. Render dashboard -> teamledger-1 -> Environment -> set DATABASE_URL to that string."
+            echo "  3. Run the migrations against it:  cd backend && alembic upgrade head"
+            echo "  4. Re-run this workflow (Actions -> deploy-guard -> Run workflow)."
+            echo
+            echo "Until then, treat anything created in this environment as temporary."
+            exit 1
+          fi
+          echo "OK: production is on $DRIVER (migration $MIGRATION)."

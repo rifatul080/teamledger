@@ -19,12 +19,35 @@
 # https://<service>.onrender.com keeps working as a same-origin fallback.
 #
 # Apply: render blueprint launch (or `render deploys create` after
-# connecting the repo). Set DATABASE_URL and SECRET_KEY in the dashboard.
+# connecting the repo). SECRET_KEY and the OAuth/Resend secrets still have to
+# be set in the dashboard.
+#
+# The blueprint provisions its OWN Postgres and wires DATABASE_URL to it via
+# `fromDatabase`. That is deliberate: if DATABASE_URL is left as a manual
+# secret and nobody fills it in, the app falls back to the SQLite default and
+# silently stores everything on the container's ephemeral disk — which is how
+# the hand-made `teamledger-1` service lost its data. A blueprint-launched
+# service cannot be misconfigured that way.
+#
+# Render's free Postgres expires after 30 days. For a long-lived deployment
+# either upgrade it or replace `fromDatabase` with `sync: false` and paste a
+# Neon connection string (https://neon.tech — free, no expiry):
+#     postgresql://USER:PASS@ep-xxx.us-east-2.aws.neon.tech/neondb?sslmode=require
+# Then run the migrations against it once: `cd backend && alembic upgrade head`.
 #
 # NOTE: this file is the *intended* shape of the service. If you created
 # the service by hand in the Dashboard (e.g. a service named
 # `teamledger-1` instead of `teamledger-api`), Render will NOT apply these
-# fields — copy the env vars below into the Dashboard by hand.
+# fields — copy the env vars below into the Dashboard by hand. If you cannot
+# set DATABASE_URL, .github/workflows/deploy-guard.yml will fail loudly
+# instead of letting the site quietly lose data again.
+
+databases:
+  - name: teamledger-db
+    databaseName: teamledger
+    user: teamledger
+    # Free plan: expires after 30 days. Swap to plan: paid to keep it.
+    plan: free
 
 services:
   - type: web
@@ -47,7 +70,11 @@ services:
     envVars:
       # ---- required secrets (set in the Render dashboard, never commit) ----
       - key: DATABASE_URL
-        sync: false  # paste the Neon connection string here
+        # Provided by the `teamledger-db` instance declared above. Replace
+        # this whole block with `sync: false` to paste a Neon URL instead.
+        fromDatabase:
+          name: teamledger-db
+          property: connectionString
       - key: SECRET_KEY
         sync: false  # any 32+ random bytes
       - key: RESEND_API_KEY

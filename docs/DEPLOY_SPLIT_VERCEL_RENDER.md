@@ -120,10 +120,41 @@ Recommended monitors (all unauthenticated and cheap):
 | --- | --- |
 | `https://<service>.onrender.com/healthz` | Render's own health check — liveness |
 | `https://<service>.onrender.com/api/v1/health` | liveness, versioned API |
-| `https://<service>.onrender.com/api/v1/health/db` | readiness — `SELECT 1` + applied migration revision; also keeps Neon awake |
+| `https://<service>.onrender.com/api/v1/health/db` | readiness — `SELECT 1` + driver + applied migration revision; also keeps Neon awake |
 
 Point probes at the **Render** host, not the Vercel one: with the rewrite
 in place a probe against Vercel only proves Vercel is up.
+
+### The one check that matters: `"driver": "sqlite"`
+
+`/api/v1/health/db` reports the database driver. If it says `sqlite`, the
+deployment is storing everything on the container's **ephemeral** disk — the
+next deploy, restart or spin-down permanently deletes every account, team,
+goal and message, while the site keeps returning `200` and accepting new
+signups.
+
+```bash
+curl -s https://<service>.onrender.com/api/v1/health/db
+# good: {"status":"ok",...,"driver":"postgresql","ephemeral":false,"migration":"3f1c2b7a55d1"}
+# BAD:  {"status":"ok",...,"driver":"sqlite","ephemeral":true,"migration":"3f1c2b7a55d1"}
+```
+
+Fixing it takes about five minutes and needs no code change:
+
+1. Create a free Postgres project at <https://neon.tech> and copy its
+   connection string.
+2. Render dashboard → your service → **Environment** → set `DATABASE_URL` to
+   that string. (Miss this step on a hand-made service and the app silently
+   falls back to SQLite — `render.yaml` declares `DATABASE_URL` via
+   `fromDatabase` precisely so a blueprint-launched service can't.)
+3. Apply the schema to the new database once:
+   `cd backend && DATABASE_URL="postgresql://…" alembic upgrade head`.
+4. Re-check `/api/v1/health/db` — `driver` should now be `postgresql` and
+   `ephemeral` should be `false`.
+
+The app also logs an `ERROR` line at boot while this is true, and
+`.github/workflows/deploy-guard.yml` fails the build on every push (and daily)
+so this can never be silent again.
 
 Optional: uploads (avatars, team files) live on the container's ephemeral
 disk (`STORAGE_LOCAL_ROOT=./storage/files`) and vanish on restart. A paid
