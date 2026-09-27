@@ -191,25 +191,35 @@ contents.
 
 ## 7. Chat
 
+In the app, open a team and press "Open chat". The page connects to
+`wss(s)://<api-origin>/api/v1/teams/$TEAM/chat`, authenticating with the
+`tl_access` cookie, and falls back to REST sends plus a 30-second poll
+if the socket cannot be established (a Vercel rewrite does not proxy
+WebSocket upgrades, so a cross-origin chat needs the socket pointed
+straight at the API origin). The status pill in the corner shows which mode
+you are in: **Live**, **Reconnecting…**, or **Offline**.
+
+**Mentions.** Type `@` in the composer to autocomplete a teammate; Tab,
+Enter, or a click inserts `@Display Name`. The mention is stored with the
+message, rendered in the accent colour, and highlighted when it is
+yours. On the server, the longest matching display name wins, so
+`@Ada Lovelace can you look` resolves to Ada rather than swallowing the
+sentence.
+
 ```bash
-# Send
-curl -sS -b cookies.txt -X POST \
-  -H 'Content-Type: application/json' -H "X-CSRF-Token: $CSRF" \
-  -d '{"body":"Drafts due Friday."}' \
+# Send (REST works identically)
+curl -sS -b cookies.txt -X POST `
+  -H 'Content-Type: application/json' -H "X-CSRF-Token: $CSRF" `
+  -d '{"body":"Drafts due Friday @Babbage"}' `
   http://localhost:8000/api/v1/teams/$TEAM/messages
 
-# Pull history (most recent first)
+# Pull history (newest first)
 curl -sS -b cookies.txt "http://localhost:8000/api/v1/teams/$TEAM/messages?limit=50"
 ```
 
-For real-time, connect a WebSocket:
-
-```text
-ws://localhost:8000/api/v1/teams/$TEAM/chat?access=<tl_access cookie value>
-```
-
 The server assigns monotonic `seq` numbers. The client may pass
-`?before_seq=N` to resync on reconnect.
+`?before_seq=N` to resync on reconnect, and `?last_seq=N` to get
+everything newer on open.
 
 ## 8. Schedules and overload
 
@@ -233,15 +243,35 @@ when a member is over their cap.
 
 ## 9. Notifications
 
-The scheduler fires reminders at 3 days, 1 day, and on overdue
-transitions. In-app notifications are visible at:
+Two sources feed the same inbox.
+
+**Event-based (immediate).** Assigning a task, reassigning one, and
+mentioning someone in chat all create a notification row in the same
+transaction as the action, and send the recipient an email on a worker
+thread. The in-app row is what the sidebar badge and the notification
+bar under the header count; the email is what catches the person who is
+not looking at the app. Assigning a task to yourself does not notify
+you.
+
+**Time-based (scheduled).** Reminders at 3 days, 1 day, and on overdue
+transitions, de-duplicated per (kind, task, recipient, bucket) so a
+re-run cannot double-send.
+
+In the app, unread items appear as a bar under the header with a one-line
+summary and an "Open activity" link; a toast also fires when one arrives
+while the tab is in the foreground. `/notifications` shows the full feed
+with per-kind tabs and "Mark all read".
 
 ```bash
 curl -sS -b cookies.txt http://localhost:8000/api/v1/notifications
 curl -sS -b cookies.txt http://localhost:8000/api/v1/notifications/unread-count
-curl -sS -b cookies.txt -X POST -H "X-CSRF-Token: $CSRF" \
+curl -sS -b cookies.txt -X POST -H "X-CSRF-Token: $CSRF" `
   http://localhost:8000/api/v1/notifications/read-all
 ```
+
+Email delivery follows `MAIL_BACKEND`: `console` (dev), `smtp`, or
+`resend`. Assignment and mention mail is best-effort — a mail provider
+outage never fails the action that triggered it.
 
 ## 10. Scoring dashboard
 
@@ -314,35 +344,48 @@ After signup you are auto-logged in. A verification link is sent to your
 email (in dev it prints to the backend console); click it or paste the
 URL into your browser to confirm. Resend from the Profile page is fine.
 
-### First-team onboarding wizard
+### First-team onboarding
 
-The first time you create a team you see a 5-step wizard:
+Creating your first team is a single form: **team name**, an optional
+one-liner of context, and an optional "kind of work" (conference paper,
+journal, thesis, lab research, grant). The work type only pre-fills the
+contribution categories used later for author order; everything stays
+editable in project settings.
 
-1. **What is this team working toward?** Choose Conference paper, Journal
-   submission, Thesis / dissertation, Ongoing lab research, or Grant
-   proposal. This drives the default category preset.
-2. **Pick a starting preset.** Each preset pre-selects a sensible subset
-   of CRediT categories with reasonable relative weights (a conference
-   paper preset weights coding and experimentation heavily; a wet-lab
-   research preset weights data collection and methodology heavily).
-   A preset only sets initial values — everything stays editable later.
-3. **Adjust the categories.** Checkboxes for every CRediT category with
-   a numeric weight next to each selected one. Nothing is locked out.
-4. **Name your team.** A few tappable suggestions are shown.
-5. **All set.** Review the summary and create the team.
+Submitting it drops you straight onto the team page with the members panel
+open and an invite link already generated, because bringing people in is
+the next thing you want to do.
 
 A pure invitee (someone who only joins existing teams and never creates
 their own) never sees this wizard — they go straight to the dashboard.
 
 ### Creating a second team (condensed)
 
-Creating a second or later team skips the wizard:
-1. Team name (with tappable suggestions).
-2. Work type.
-3. Preset choice.
+Same one-line form. If you already belong to a team, the "New team" button
+from `/teams` still works; the form just notes that you are already on
+one and offers to open it.
 
-No re-explaining of CRediT categories or re-asking about the account —
-the person already knows the app.
+### Social sign-in
+
+If the server has Google or Facebook credentials, the sign-in and
+sign-up pages show a button per configured provider. It is the same
+session as a password login: the callback sets the identical cookie
+bundle, so the 14-day refresh cookie behaves the same way.
+
+Server environment (see `backend/.env.example`):
+
+```bash
+GOOGLE_CLIENT_ID=...            GOOGLE_CLIENT_SECRET=...
+FACEBOOK_CLIENT_ID=...          FACEBOOK_CLIENT_SECRET=...
+OAUTH_REDIRECT_BASE=https://your-api-origin
+```
+
+Register the exact callback with each provider:
+`{OAUTH_REDIRECT_BASE}/api/v1/auth/oauth/google/callback` (same for
+`facebook`). Leave a pair blank and that provider simply does not
+appear. A social sign-in is matched to an existing account by email and
+marks it verified; a new account gets a random, unusable password, so it
+can only ever be entered through the provider.
 
 ### Command palette
 
@@ -414,5 +457,50 @@ the tabs. "Mark all read" clears everything. Per-team feeds at
 
 Press `Ctrl+K` and type any phrase. The palette pulls together matches
 across messages, task titles, and file names — all in one box, grouped
-by type.
 
+### Personal notes
+
+`/notes` is a private scratchpad: title, body, and a pin. Nobody on your
+teams can read it — the API filters on the authenticated user, and a note id
+belonging to someone else is a 404, not a 403, so it never confirms that an
+id exists. Pinned notes sort first.
+
+```bash
+curl -sS -b cookies.txt http://localhost:8000/api/v1/me/notes
+curl -sS -b cookies.txt -X POST -H "X-CSRF-Token: $CSRF" \
+  -H 'Content-Type: application/json' \
+  -d '{"title":"Ask about the camera-ready","content":"Email the editor Monday"}' \
+  http://localhost:8000/api/v1/me/notes
+```
+
+### My week (planner)
+
+`/schedule` is your own availability plus the deadlines assigned to you.
+Add time blocks per weekday, set a weekly cap, and save; the page then shows
+your tasks and milestones for that week and warns you when your booked hours
+exceed the cap.
+
+Leaders can also write a plan for any member. A member can only write their
+own — editing somebody else's availability is a 403.
+
+```bash
+curl -sS -b cookies.txt -X PUT -H "X-CSRF-Token: $CSRF" \
+  -H 'Content-Type: application/json' \
+  -d "{\"user_id\":\"$ADA\",\"weekly_cap_hours\":25,
+       \"slots\":[{\"weekday\":0,\"start_minute\":540,\"end_minute\":1020}]}" \
+  http://localhost:8000/api/v1/teams/$TEAM/schedules
+
+curl -sS -b cookies.txt \
+  "http://localhost:8000/api/v1/teams/$TEAM/calendar?start=2026-01-05&end=2026-01-11&user_id=$ADA"
+```
+
+### Assigning work in the UI
+
+On a project page: **New goal**, **Add milestone**, and **Assign task** — the
+task form takes a milestone, a teammate from the project's participant list,
+a contribution category, an estimate, and a required due date. On a goal
+page, each milestone lists its tasks with the assignee and deadline and
+offers the same assignment inline. Assigning a task is what sends the
+notification and the email.
+
+by type.

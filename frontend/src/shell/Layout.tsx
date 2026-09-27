@@ -5,6 +5,7 @@ import { useUnreadCount } from "../app/notifications";
 import { useTheme } from "../app/theme";
 import { Avatar } from "../components/ui/Avatar";
 import { CommandPalette, usePalette } from "./CommandPalette";
+import { NotificationBar } from "../components/shell/NotificationBar";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const me = useMe();
@@ -119,6 +120,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <Link to="/dashboard" className="btn-ghost justify-start">Dashboard</Link>
             <Link to="/teams" className="btn-ghost justify-start">Teams</Link>
             <Link to="/notifications" className="btn-ghost justify-start">Activity</Link>
+            <Link to="/schedule" className="btn-ghost justify-start">My week</Link>
+            <Link to="/notes" className="btn-ghost justify-start">Notes</Link>
             <Link to="/me" className="btn-ghost justify-start">Profile</Link>
             <button
               type="button"
@@ -142,6 +145,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </button>
           </div>
         )}
+        <NotificationBar />
         <main id="main" className="flex-1 min-w-0">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">{children}</div>
         </main>

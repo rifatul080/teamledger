@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { filterMembers, mentionQueryAt, splitMentions, wsUrlFor } from "../chat";
+import { oauthStartUrl } from "../auth";
 
 describe("mentionQueryAt", () => {
   it("detects a bare @ at the caret", () => {
@@ -75,5 +76,11 @@ describe("wsUrlFor", () => {
     const url = wsUrlFor("/teams/abc/chat");
     expect(url.startsWith("ws://") || url.startsWith("wss://")).toBe(true);
     expect(url).toContain("/api/v1/teams/abc/chat");
+  });
+});
+
+describe("oauthStartUrl", () => {
+  it("points at the API's OAuth start endpoint", () => {
+    expect(oauthStartUrl("google")).toContain("/api/v1/auth/oauth/google");
   });
 });

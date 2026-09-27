@@ -168,6 +168,30 @@ costs you three things:
    built from `document.cookie` cross-origin, so mutations fail with
    `403 auth.csrf` until the token is also exposed some other way — e.g.
    return it in a response header on login/refresh and add that header to
+
+## WebSockets (team chat) on a split deploy
+
+A Vercel rewrite proxies HTTP, not the WebSocket upgrade, so
+`wss://<vercel-domain>/api/v1/teams/{id}/chat` will not connect. The
+frontend already solves this: `wsUrlFor()` builds the socket URL from
+`VITE_API_BASE_URL`, so when that variable points at the Render origin the
+browser connects straight to Render and the rewrite is bypassed.
+
+For that direct connection to be authenticated you need two things on the
+backend:
+
+```bash
+COOKIE_SAMESITE=none          # otherwise the tl_access cookie is never
+                              # attached to a cross-site socket handshake
+CORS_ALLOWED_ORIGINS=https://<your-vercel-domain>
+```
+
+`COOKIE_SAMESITE=none` forces `Secure`, so the API must be on HTTPS (it is,
+on Render). With those set, chat is live on the Vercel frontend. Without
+them the page still works: it falls back to REST sends plus a 30-second poll
+and the status pill reads "Reconnecting…" instead of "Live".
+
+
    `expose_headers` in `app/main.py`, then store it client-side.
 
 ## Troubleshooting

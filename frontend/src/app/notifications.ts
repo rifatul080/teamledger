@@ -60,6 +60,47 @@ export function useMarkActivityRead() {
       api("/activity/read", { method: "POST", json: vars }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["activity"] });
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// The durable notification rows (assignment, mention, deadline reminders).
+// The activity feed above is derived from the audit log; these are the records
+// that carry a read flag, so the app bar and the sidebar badge agree.
+// ---------------------------------------------------------------------------
+
+export type NotificationRow = {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  team_id?: string | null;
+  project_id?: string | null;
+  task_id?: string | null;
+  read: boolean;
+  created_at: string;
+};
+
+export function useNotifications(limit = 10) {
+  return useQuery({
+    queryKey: ["notifications", limit],
+    queryFn: () => api<NotificationRow[]>("/notifications", { params: { limit } }),
+    refetchInterval: 20_000,
+  });
+}
+
+export function useMarkNotificationsRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids?: string[]) =>
+      ids?.length
+        ? api("/notifications/read", { method: "POST", json: { ids } })
+        : api("/notifications/read-all", { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+      qc.invalidateQueries({ queryKey: ["activity"] });
     },
   });
 }
