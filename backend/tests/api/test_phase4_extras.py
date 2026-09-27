@@ -119,16 +119,36 @@ def test_schedules_upsert_get_calendar_timeline(client, world) -> None:
     assert "items" in r.json()
 
 
-def test_member_cannot_set_plan(client, world) -> None:
+def test_member_sets_own_plan_but_not_someone_elses(client, world) -> None:
+    """Members own their availability; only a leader may write another plan."""
     member = world["member"]
-    world["leader"]
+    leader = world["leader"]
     team_id = world["team_id"]
     m_id = member.get("/api/v1/me").json()["id"]
+    l_id = leader.get("/api/v1/me").json()["id"]
+
+    # Own plan: allowed (this is what the personal planner writes).
     r = member.put(
         f"/api/v1/teams/{team_id}/schedules",
         json={"user_id": m_id, "weekly_cap_hours": 10, "slots": []},
     )
+    assert r.status_code == 200, r.text
+    assert r.json()["user_id"] == m_id
+
+    # Someone else's plan: still leader-only.
+    r = member.put(
+        f"/api/v1/teams/{team_id}/schedules",
+        json={"user_id": l_id, "weekly_cap_hours": 10, "slots": []},
+    )
     assert r.status_code == 403, r.text
+
+    # The leader can still write anyone's plan.
+    r = leader.put(
+        f"/api/v1/teams/{team_id}/schedules",
+        json={"user_id": m_id, "weekly_cap_hours": 20, "slots": []},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["weekly_cap_hours"] == 20
 
 
 def test_chat_send_list_edit_delete(client, world) -> None:

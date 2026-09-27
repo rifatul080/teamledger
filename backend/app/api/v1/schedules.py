@@ -6,8 +6,8 @@ from datetime import date as date_t
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from ...api.deps import audit, current_user, get_db, require_membership, require_role
-from ...core.errors import not_found
+from ...api.deps import audit, current_user, get_db, require_membership
+from ...core.errors import forbidden, not_found
 from ...models.schedule import ScheduleSlot
 from ...models.team import Team
 from ...models.user import User
@@ -24,7 +24,15 @@ def upsert_plan(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ) -> WeeklyPlanRead:
-    require_role(team_id, db, user.id, role="leader")
+    # Leaders can set anyone's plan; members can only set their own, which is
+    # what the personal planner in the app writes.
+    membership = require_membership(team_id, db, user.id)
+    if membership.role != "leader" and payload.user_id != user.id:
+        raise forbidden(
+            code="perm.role_required",
+            message="Only the team leader can set another member's plan.",
+            details={"required": "leader"},
+        )
     team = db.get(Team, team_id)
     if team is None:
         raise not_found(code="team.not_found")
