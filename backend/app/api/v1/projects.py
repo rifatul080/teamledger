@@ -8,7 +8,10 @@ from sqlalchemy.orm import Session
 
 from ...api.deps import audit, current_user, get_db, require_membership, require_role
 from ...core.errors import not_found, validation
+from ...models.goal import Goal
+from ...models.milestone import Milestone
 from ...models.project import Project
+from ...models.task import Task
 from ...models.user import User
 from ...schemas.projects import (
     CategoryMultiplierIn,
@@ -20,6 +23,7 @@ from ...schemas.projects import (
     TimelinessUpdate,
 )
 from ...schemas.scoring import ScoreRead
+from ...schemas.tasks import TaskRead
 from ...services import project_service, task_service
 from ...services.credit import CREDIT_BY_CODE
 
@@ -142,6 +146,39 @@ def update_project(
     )
     db.commit()
     return ProjectRead.model_validate(proj)
+
+
+@router.get("/projects/{project_id}/participants", response_model=list[str])
+def get_participants(
+    project_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> list[str]:
+    proj = db.get(Project, project_id)
+    if proj is None:
+        raise not_found(code="project.not_found")
+    require_membership(proj.team_id, db, user.id)
+    return project_service.participating_user_ids(db, project_id)
+
+
+@router.get("/projects/{project_id}/tasks", response_model=list[TaskRead])
+def list_project_tasks(
+    project_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> list[TaskRead]:
+    proj = db.get(Project, project_id)
+    if proj is None:
+        raise not_found(code="project.not_found")
+    require_membership(proj.team_id, db, user.id)
+    goal_ids = [g.id for g in db.query(Goal).filter(Goal.project_id == project_id).all()]
+    if not goal_ids:
+        return []
+    ms_ids = [m.id for m in db.query(Milestone).filter(Milestone.goal_id.in_(goal_ids)).all()]
+    if not ms_ids:
+        return []
+    tasks = db.query(Task).filter(Task.milestone_id.in_(ms_ids)).order_by(Task.due_date.asc()).all()
+    return [TaskRead.model_validate(t) for t in tasks]
 
 
 @router.post("/projects/{project_id}/participants", status_code=204)
