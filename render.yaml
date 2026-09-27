@@ -29,19 +29,20 @@
 services:
   - type: web
     name: teamledger-api
-    # 0.5 CPU / 512 MB. Legacy plan name: `starter`.
-    # PAID ON PURPOSE: free instances spin down after 15 minutes of
-    # inactivity and take ~1 minute to wake up. Any paid compute plan
-    # removes that limitation. See docs/DEPLOY_SPLIT_VERCEL_RENDER.md
-    # § "Never shuts down".
-    plan: "0.5c-512mb"
+    # FREE on purpose — keep-alive pings (heartbeat-a/b GitHub Actions
+    # workflows + uptime.yml + Cloudflare Worker cron) hit
+    # /api/v1/health/db every ~5 min, which resets Render's 15-minute
+    # idle-spin-down timer. Swap to "0.5c-512mb" (paid, never sleeps)
+    # if you prefer certainty over pings. See
+    # docs/DEPLOY_SPLIT_VERCEL_RENDER.md § "Never shuts down".
+    plan: "free"
     runtime: docker
     # Render's Docker build context is the repo root, so the Dockerfile
     # lives at the root too. dockerContext is set explicitly to "." so
     # there's no ambiguity (Render defaults to the repo root anyway).
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    healthCheckPath: /healthz
+    healthCheckPath: /api/v1/health/db
     autoDeploy: true
     envVars:
       # ---- required secrets (set in the Render dashboard, never commit) ----

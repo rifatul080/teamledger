@@ -144,13 +144,13 @@ This round ships a one-service deploy that runs the FastAPI process and serves t
 ### Provisioning (one-time, owner steps)
 
 1. **Neon** at https://neon.tech: free Postgres, scales to zero. Create a project named `teamledger`, copy the connection string (it looks like `postgresql://USER:PASS@ep-xxx.us-east-2.aws.neon.tech/neondb?sslmode=require`).
-2. **Render** at https://render.com: connect the GitHub repo, choose "Web Service" from this repo, and set the **Dockerfile Path** to `./Dockerfile` (repo root). Render always uses the repo root as the Docker build context, so a `backend/...` Dockerfile path fails — see `DEPLOY_SPLIT_VERCEL_RENDER.md`. Set `DATABASE_URL` to the Neon string above. Choose a paid compute plan (`0.5c-512mb`, legacy name *Starter*): Free instances sleep on idle, which is the behavior most often mistaken for an outage.
+2. **Render** at https://render.com: connect the GitHub repo, choose "Web Service" from this repo, and set the **Dockerfile Path** to `./Dockerfile` (repo root). Render always uses the repo root as the Docker build context, so a `backend/...` Dockerfile path fails — see `DEPLOY_SPLIT_VERCEL_RENDER.md`. Set `DATABASE_URL` to the Neon string above. The **Free** compute plan works as long as the keep-alive pings below are running; a paid plan (`0.5c-512mb`) removes the 15-minute idle sleep entirely if you prefer certainty over pings.
 3. **Resend** (optional) at https://resend.com: free tier 100 emails/day. Verify a domain or use the sandbox sender, then paste the API key as `RESEND_API_KEY` in Render's env vars. Without a key the app keeps working - emails just print to the server log.
 4. (Optional) **Custom domain**: buy one, set `PUBLIC_BASE_URL`, add the DNS CNAME Render gives you.
 
 ### Expected free-tier behaviors
 
-- **Render free web service sleeps after 15 min without inbound traffic.** Waking takes about a minute, and Render serves a loading page to the browser meanwhile; this is normal, not a bug. Any paid compute plan removes the behavior.
+- **Render free web service sleeps after 15 min without inbound traffic — unless keep-alive pings are running.** The repo ships three free ping layers (`heartbeat-a`/`heartbeat-b` workflows, the `uptime` schedule, and a Cloudflare Worker cron; see `DEPLOY_SPLIT_VERCEL_RENDER.md` § 3). Any inbound request resets the 15-minute timer, so a ping every ~5 minutes keeps the service warm. If a ping layer is down, waking takes about a minute and Render serves a loading page meanwhile — normal, not a bug.
 - **Neon free Postgres scales to zero when idle.** Same pattern - first query after a quiet period takes ~1-2s longer while the compute warms. The connection string stays valid.
 - **Storage is local to the Render service.** Avatars and files do NOT survive a redeploy that wipes the disk. For real production install, swap `STORAGE_BACKEND=local` for an S3-compatible backend.
 

@@ -93,20 +93,26 @@ values above in by hand.
 ## 3. Never shuts down
 
 Two independent platform timers can put the app to sleep. Neither is an
-app bug.
+app bug. The stack runs on **Free** compute plans end to end and keeps
+both layers awake with automated pings instead of a paid plan:
 
-| Layer | Free behaviour | Fix |
+| Layer | Free behaviour | Defence |
 | --- | --- | --- |
-| Render web service | **Spins down after 15 minutes without inbound traffic.** Waking takes **about one minute**, and Render shows a loading page to the connecting browser meanwhile. Free instances also lose their local filesystem on every spin-down / redeploy / restart, and cannot attach a persistent disk. | Give the service a paid compute plan: `0.5c-512mb` (legacy name *Starter*, 0.5 CPU / 512 MB). Any paid plan removes the spin-down limitation. Dashboard → service → Settings → **Compute plan** (labelled *Instance Type* in older dashboards). |
-| Neon Postgres | **Compute scales to zero after 5 minutes of inactivity** — fixed on the Free plan; paid plans can disable it. | Resume takes only **a few hundred milliseconds**, so it is usually harmless. Keep it warm by pinging a DB-touching endpoint; `/api/v1/health/db` exists for exactly this. |
+| Render web service | **Spins down after 15 minutes without inbound traffic.** Waking takes **about one minute**, and Render shows a loading page to the connecting browser meanwhile. Free instances also lose their local filesystem on every spin-down / redeploy / restart, and cannot attach a persistent disk. | **Keep-alive ping every ~5 minutes.** Per Render's docs, *any* inbound traffic resets the 15-minute timer, so a steady ping keeps the instance warm indefinitely. |
+| Neon Postgres | **Compute scales to zero after 5 minutes of inactivity** — fixed on the Free plan. | Every ping hits `/api/v1/health/db` (`SELECT 1` + applied migration revision), which resets Neon's idle timer too. |
 
-Keep-alive pings cannot fully replace the paid plan. UptimeRobot's free
-interval is 5 minutes, and one missed sample still puts a visitor on the
-1-minute cold-start path (that is what produced the "down for 0h 6m 25s"
-alert: a 5-minute sampling interval reports a single failed sample as
-~5 minutes of downtime). If "never shuts down" is a hard requirement,
-upgrade the Render service — Render's own free-tier page says *"Do not use
-them for production applications."*
+Keep-alive layers — free, automated, stacked for redundancy:
+
+| Layer | Trigger | Notes |
+| --- | --- | --- |
+| `.github/workflows/heartbeat-a.yml` + `heartbeat-b.yml` | Self-sustaining `workflow_run` ping-pong (~5 min apart), bootstrapped by any push that touches `heartbeat-a.yml` | **Primary.** Survives ping failures (the chain fires on *any* run conclusion) and does not depend on GitHub's `schedule` timer, which proved unreliable in this repo — it fired twice in 6.5 hours instead of every 5 minutes. Public repo ⇒ Actions minutes are free. |
+| `.github/workflows/uptime.yml` | `schedule: */5` (plus manual dispatch) | Bonus. GitHub's scheduler registered this workflow late and fired sparsely; when it works it's an extra ping. |
+| Cloudflare Worker cron (`wrangler.jsonc` → `triggers.crons: ["*/5 * * * *"]`) | Cloudflare cron trigger pinging the same endpoint | Bonus. Needs the *Workers Builds* Git integration to deploy successfully — check the build (Build ID link on the commit's check) if it stays red. |
+
+If you'd rather not rely on pings at all, give the Render service a paid
+compute plan (`0.5c-512mb`, legacy name *Starter*, 0.5 CPU / 512 MB) —
+any paid plan removes the spin-down limitation outright. Render's own
+free-tier page says *"Do not use them for production applications."*
 
 Recommended monitors (all unauthenticated and cheap):
 
