@@ -1,5 +1,15 @@
 # Deploying TeamLedger on Cloudflare Containers
 
+> **Status 2026-09-27 — Worker repurposed as a keep-alive cron.**
+> The Container proxy architecture below requires the **paid** Workers
+> plan, so it never deployed on the free tier. `wrangler.jsonc` now
+> defines a free-plan Worker whose `scheduled()` handler pings the Render
+> backend (`/api/v1/health/db`) every 5 minutes as one layer of the
+> keep-alive stack (see `docs/DEPLOY_SPLIT_VERCEL_RENDER.md` § 3), and
+> whose `fetch()` 302-redirects `*.workers.dev` to the Vercel site.
+> `src/container.ts` was deleted (git history keeps it). The original
+> Container walkthrough is retained below for reference.
+
 Cloudflare Containers is in early access and requires the **Workers Paid
 plan** ($5/month minimum + per-instance-hours). It's not part of the free
 tier, but it's cheap: $0.012/hr per running instance.
