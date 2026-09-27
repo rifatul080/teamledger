@@ -1,6 +1,6 @@
 // Centralized auth state + queries. HttpOnly cookies drive session; me() is the source of truth.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "./api";
+import { api, buildUrl } from "./api";
 
 export type Me = {
   id: string;
@@ -13,6 +13,28 @@ export type Me = {
   institution?: string | null;
   created_at: string;
 };
+
+export type OAuthProviderInfo = {
+  id: string;
+  label: string;
+  configured: boolean;
+};
+
+/** Social buttons to render — providers without credentials are hidden. */
+export function useOAuthProviders() {
+  return useQuery({
+    queryKey: ["oauth-providers"],
+    queryFn: () =>
+      api<{ providers: OAuthProviderInfo[] }>("/auth/oauth/providers"),
+    staleTime: 10 * 60 * 1000,
+    retry: false,
+  });
+}
+
+/** Full-page redirect URL that starts the provider's consent screen. */
+export function oauthStartUrl(providerId: string): string {
+  return buildUrl(`/auth/oauth/${providerId}`).toString();
+}
 
 export function useMe(enabled = true) {
   return useQuery({

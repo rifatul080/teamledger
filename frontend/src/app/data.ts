@@ -1,4 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { useQueries, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./api";
 
 export type Team = {
@@ -162,16 +163,18 @@ export function useGoalMilestones(goalId: string | undefined) {
   });
 }
 
-export function useCreateMilestone(goalId: string, projectId: string) {
+export function useCreateMilestone(projectId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { title: string; due_date?: string }) =>
-      api<Milestone>(`/goals/${goalId}/milestones`, {
+    // The goal is chosen in the form, so it travels in the body rather than
+    // the path � one mutation instance serves every goal in the project.
+    mutationFn: (body: { goal_id: string; title: string; due_date?: string }) =>
+      api<Milestone>(`/goals/${body.goal_id}/milestones`, {
         method: "POST",
-        json: body,
+        json: { title: body.title, due_date: body.due_date },
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["goal-milestones", goalId] });
+      qc.invalidateQueries({ queryKey: ["goal-milestones"] });
       qc.invalidateQueries({ queryKey: ["project-goals", projectId] });
     },
   });
@@ -368,6 +371,7 @@ export function useSearch() {
         tasks: { id: string; title: string; project_id: string; status: string }[];
         messages: { id: string; body: string; team_id: string }[];
         files: { id: string; name: string; team_id: string }[];
+
       }>(`/search?q=${encodeURIComponent(q)}`),
   });
 }
@@ -449,3 +453,159 @@ export const PRESETS: Record<WorkType, { label: string; categories: { code: stri
     ],
   },
 };
+// ---------------------------------------------------------------------------
+// Assignee pickers: who contributes to a project
+// ---------------------------------------------------------------------------
+
+export function useProjectMilestones(goals: Goal[] | undefined) {
+  const results = useQueries({
+    queries: (goals ?? []).map((g) => ({
+      queryKey: ["goal-milestones", g.id],
+      queryFn: () => api<Milestone[]>(`/goals/${g.id}/milestones`),
+    })),
+  });
+  return useMemo(
+    () =>
+      (goals ?? []).flatMap((g, i) =>
+        (results[i]?.data ?? []).map((m) => ({ ...m, goal_title: g.title })),
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [goals, results],
+  );
+}
+
+export function useProjectParticipants(projectId: string | undefined) {
+  return useQuery({
+    queryKey: ["project-participants", projectId],
+    enabled: Boolean(projectId),
+    queryFn: () => api<string[]>(`/projects/${projectId}/participants`),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Personal notes (/me/notes)
+// ---------------------------------------------------------------------------
+
+export type Note = {
+  id: string;
+  user_id: string;
+  title: string;
+  content: string;
+  pinned: boolean;
+  created_at: string;
+  updated_at?: string | null;
+};
+
+export function useNotes() {
+  return useQuery({
+    queryKey: ["notes"],
+    queryFn: () => api<Note[]>("/me/notes"),
+  });
+}
+
+export function useCreateNote() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { title?: string; content?: string; pinned?: boolean }) =>
+      api<Note>("/me/notes", { method: "POST", json: body }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["notes"] }),
+  });
+}
+
+export function useUpdateNote() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string } & Partial<Pick<Note, "title" | "content" | "pinned">>) =>
+      api<Note>(`/me/notes/${vars.id}`, {
+        method: "PATCH",
+        json: {
+          title: vars.title,
+          content: vars.content,
+          pinned: vars.pinned,
+        },
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["notes"] }),
+  });
+}
+
+export function useDeleteNote() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api(`/me/notes/${id}`, { method: "DELETE" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["notes"] }),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Weekly planner (/teams/{id}/schedules, calendar)
+// ---------------------------------------------------------------------------
+
+export type ScheduleSlot = {
+  weekday: number;
+  start_minute: number;
+  end_minute: number;
+};
+
+export type WeeklyPlan = {
+  id?: string;
+  team_id: string;
+  user_id: string;
+  weekly_cap_hours: number;
+  slots: ScheduleSlot[];
+};
+
+export type CalendarItem = {
+  kind: "task" | "milestone";
+  id: string;
+  title: string;
+  assignee_user_id?: string;
+  start_date?: string;
+  due_date: string;
+  status?: string;
+};
+
+export function useWeeklyPlan(teamId: string | undefined, userId: string | undefined) {
+  return useQuery({
+    queryKey: ["weekly-plan", teamId, userId],
+    enabled: Boolean(teamId && userId),
+    queryFn: () => api<WeeklyPlan>(`/teams/${teamId}/schedules/${userId}`),
+  });
+}
+
+export function useSaveWeeklyPlan(teamId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { user_id: string; weekly_cap_hours: number; slots: ScheduleSlot[] }) =>
+      api<WeeklyPlan>(`/teams/${teamId}/schedules`, { method: "PUT", json: body }),
+    onSuccess: (data) =>
+      qc.invalidateQueries({ queryKey: ["weekly-plan", teamId, data.user_id] }),
+  });
+}
+
+export function useTeamCalendar(
+  teamId: string | undefined,
+  start: string,
+  end: string,
+  userId?: string,
+) {
+  return useQuery({
+    queryKey: ["team-calendar", teamId, start, end, userId ?? "all"],
+    enabled: Boolean(teamId),
+    queryFn: () =>
+      api<{ items: CalendarItem[] }>(`/teams/${teamId}/calendar`, {
+        params: { start, end, user_id: userId },
+      }),
+  });
+}
+
+export function useTeamOverload(teamId: string | undefined, weekStart: string) {
+  return useQuery({
+    queryKey: ["team-overload", teamId, weekStart],
+    enabled: Boolean(teamId),
+    queryFn: () =>
+      api<{ items: { user_id: string; assigned_hours: number; cap_hours: number }[] }>(
+        `/teams/${teamId}/overload`,
+        { params: { week_start: weekStart } },
+      ),
+  });
+}

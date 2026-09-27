@@ -15,6 +15,8 @@ import ScoringPage from "./pages/ScoringPage";
 import NotificationsPage from "./pages/NotificationsPage";
 import ProfilePage from "./pages/ProfilePage";
 import OnboardingPage from "./pages/OnboardingPage";
+import NotesPage from "./pages/NotesPage";
+import SchedulePage from "./pages/SchedulePage";
 import VerifyEmailPage from "./pages/VerifyEmailPage";
 import AcceptInvitePage from "./pages/AcceptInvitePage";
 import NotFoundPage from "./pages/NotFoundPage";
@@ -44,6 +46,8 @@ export default function App() {
           />
           <Route path="/projects/:projectId/scoring" element={<ScoringPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
+          <Route path="/schedule" element={<SchedulePage />} />
+          <Route path="/notes" element={<NotesPage />} />
           <Route path="/me" element={<ProfilePage />} />
           <Route path="/u/:userId" element={<ProfilePage />} />
         </Route>

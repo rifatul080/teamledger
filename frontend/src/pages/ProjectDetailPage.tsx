@@ -1,13 +1,22 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
+  useCreateGoal,
+  useCreateMilestone,
+  useCreateTask,
+  useCreditCategories,
   useProject,
   useProjectGoals,
+  useProjectMilestones,
+  useProjectParticipants,
   useProjectTasks,
+  useTeamMembers,
   useUpdateTaskStatus,
   Task,
 } from "../app/data";
+import { useMe } from "../app/auth";
 import { EmptyState } from "../components/ui/EmptyState";
+import { Modal } from "../components/ui/Modal";
 import { StatusBadge } from "../components/ui/StatusBadge";
 import { pushToast } from "../components/ui/Toast";
 
@@ -30,6 +39,7 @@ const COLUMNS: Task["status"][] = [
 
 export default function ProjectDetailPage() {
   const { projectId } = useParams();
+  const me = useMe();
   const project = useProject(projectId);
   const goals = useProjectGoals(projectId);
   const tasks = useProjectTasks(projectId);
@@ -38,6 +48,47 @@ export default function ProjectDetailPage() {
     const saved = localStorage.getItem(`tl.view.${projectId}`);
     return (saved as ViewMode) ?? "board";
   });
+
+  // Assignment + planning
+  const participants = useProjectParticipants(projectId);
+  const milestones = useProjectMilestones(goals.data);
+  const members = useTeamMembers(project.data?.team_id);
+  const categories = useCreditCategories();
+  const createTask = useCreateTask(projectId);
+  const createGoal = useCreateGoal(projectId ?? "");
+  const createMilestone = useCreateMilestone(projectId ?? "");
+  const [taskOpen, setTaskOpen] = useState(false);
+  const [goalOpen, setGoalOpen] = useState(false);
+  const [milestoneOpen, setMilestoneOpen] = useState(false);
+  const [form, setForm] = useState({
+    title: "",
+    description: "",
+    milestone_id: "",
+    assignee_user_id: "",
+    category_code: "",
+    weight: "1",
+    est_hours: "1",
+    start_date: new Date().toISOString().slice(0, 10),
+    due_date: "",
+  });
+  const [goalForm, setGoalForm] = useState({ title: "", description: "", target_date: "" });
+  const [msForm, setMsForm] = useState({ goal_id: "", title: "", due_date: "" });
+
+  const nameById = useMemo(
+    () => new Map((members.data ?? []).map((m) => [m.user_id, m.display_name])),
+    [members.data],
+  );
+  const assignees = useMemo(
+    () =>
+      (participants.data ?? [])
+        .map((id) => ({ id, name: nameById.get(id) ?? "Member" }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [participants.data, nameById],
+  );
+  const myId = me.data?.id;
+  // Default the assignee to you when you contribute to the project.
+  const defaultAssignee =
+    assignees.find((a) => a.id === myId)?.id ?? assignees[0]?.id ?? "";
 
   if (!projectId) return null;
   if (project.isLoading) return <div className="text-meta">Loading project…</div>;
@@ -48,6 +99,86 @@ export default function ProjectDetailPage() {
   function changeView(v: ViewMode) {
     setView(v);
     if (projectId) localStorage.setItem(`tl.view.${projectId}`, v);
+  }
+
+  const canManage = milestones.length > 0 && assignees.length > 0;
+
+  async function submitTask() {
+    if (!form.title.trim() || !form.milestone_id || !form.assignee_user_id) {
+      pushToast({
+        kind: "error",
+        title: "Missing details",
+        body: "Title, milestone and assignee are required.",
+      });
+      return;
+    }
+    if (!form.due_date) {
+      pushToast({ kind: "error", title: "Pick a due date", body: "Tasks need a deadline." });
+      return;
+    }
+    try {
+      await createTask.mutateAsync({
+        milestone_id: form.milestone_id,
+        assignee_user_id: form.assignee_user_id,
+        title: form.title.trim(),
+        description: form.description || undefined,
+        category_code: form.category_code || "software",
+        weight: Number(form.weight) || 1,
+        est_hours: Number(form.est_hours) || 1,
+        start_date: form.start_date,
+        due_date: form.due_date,
+      });
+      pushToast({
+        kind: "ok",
+        title: "Task assigned",
+        body: `${nameById.get(form.assignee_user_id) ?? "Your teammate"} gets a notification and an email.`,
+      });
+      setTaskOpen(false);
+      setForm((f) => ({ ...f, title: "", description: "", due_date: "" }));
+    } catch (e) {
+      pushToast({
+        kind: "error",
+        title: "Could not create task",
+        body: e instanceof Error ? e.message : "Please try again.",
+      });
+    }
+  }
+
+  async function submitGoal() {
+    if (!goalForm.title.trim()) return;
+    try {
+      await createGoal.mutateAsync({
+        title: goalForm.title.trim(),
+        description: goalForm.description || undefined,
+        target_date: goalForm.target_date || undefined,
+      });
+      pushToast({ kind: "ok", title: "Goal added" });
+      setGoalOpen(false);
+      setGoalForm({ title: "", description: "", target_date: "" });
+    } catch (e) {
+      pushToast({
+        kind: "error",
+        title: "Could not create goal",
+        body: e instanceof Error ? e.message : "Please try again.",
+      });
+    }
+  }
+
+  async function submitMilestone() {
+    if (!msForm.goal_id || !msForm.title.trim()) {
+      pushToast({ kind: "error", title: "Pick a goal and a title" });
+      return;
+    }
+    const milestone = await createMilestone.mutateAsync({
+      goal_id: msForm.goal_id,
+      title: msForm.title.trim(),
+      due_date: msForm.due_date || undefined,
+    }).catch(() => null);
+    if (milestone) {
+      pushToast({ kind: "ok", title: "Milestone added" });
+      setMilestoneOpen(false);
+      setMsForm({ goal_id: "", title: "", due_date: "" });
+    }
   }
 
   return (
@@ -66,9 +197,28 @@ export default function ProjectDetailPage() {
           <Link to={`/projects/${projectId}/scoring`} className="btn-secondary">
             Scoring
           </Link>
-          <Link to={`/projects/${projectId}/goals/new`} className="btn-secondary">
+          <button className="btn-secondary" onClick={() => setGoalOpen(true)}>
             New goal
-          </Link>
+          </button>
+          <button
+            className="btn-primary"
+            onClick={() => {
+              setForm((f) => ({
+                ...f,
+                milestone_id: f.milestone_id || milestones[0]?.id || "",
+                assignee_user_id: f.assignee_user_id || defaultAssignee,
+              }));
+              setTaskOpen(true);
+            }}
+            disabled={!canManage}
+            title={
+              canManage
+                ? undefined
+                : "A project needs a milestone and at least one participant before tasks can be assigned."
+            }
+          >
+            Assign task
+          </button>
         </div>
       </header>
 
@@ -97,12 +247,28 @@ export default function ProjectDetailPage() {
       )}
 
       <section className="card">
-        <h2 className="text-h2 mb-3">Goals</h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-h2">Goals & milestones</h2>
+          <button
+            className="btn-ghost btn-sm"
+            onClick={() => {
+              setMsForm({ goal_id: goals.data?.[0]?.id ?? "", title: "", due_date: "" });
+              setMilestoneOpen(true);
+            }}
+            disabled={(goals.data?.length ?? 0) === 0}
+          >
+            Add milestone
+          </button>
+        </div>
         {(goals.data?.length ?? 0) === 0 ? (
           <EmptyState
             title="No goals yet."
             body="Goals give the project a north star; milestones are the checkpoints."
-            action={<Link to={`/projects/${projectId}/goals/new`} className="btn-primary">Add a goal</Link>}
+            action={
+              <button className="btn-primary" onClick={() => setGoalOpen(true)}>
+                Add a goal
+              </button>
+            }
           />
         ) : (
           <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -120,6 +286,247 @@ export default function ProjectDetailPage() {
             ))}
           </ul>
         )}
+
+      <Modal open={taskOpen} onClose={() => setTaskOpen(false)} title="Assign a task" size="lg">
+        {milestones.length === 0 ? (
+          <EmptyState
+            title="Add a milestone first"
+            body="Tasks live inside a milestone, which lives inside a goal."
+            action={
+              <button
+                className="btn-primary"
+                onClick={() => {
+                  setTaskOpen(false);
+                  setGoalOpen(true);
+                }}
+              >
+                Create a goal
+              </button>
+            }
+          />
+        ) : (
+          <div className="flex flex-col gap-3">
+            <label className="flex flex-col gap-1 text-sm">
+              Title
+              <input
+                className="input"
+                value={form.title}
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
+                placeholder="Draft the results section"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              Details
+              <textarea
+                className="input min-h-[4rem]"
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                placeholder="What does done look like?"
+              />
+            </label>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <label className="flex flex-col gap-1 text-sm">
+                Milestone
+                <select
+                  className="input"
+                  value={form.milestone_id}
+                  onChange={(e) => setForm({ ...form, milestone_id: e.target.value })}
+                >
+                  <option value="">Choose a milestone…</option>
+                  {milestones.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.title} — {m.goal_title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 text-sm">
+                Assign to
+                <select
+                  className="input"
+                  value={form.assignee_user_id}
+                  onChange={(e) => setForm({ ...form, assignee_user_id: e.target.value })}
+                >
+                  <option value="">Choose a teammate…</option>
+                  {assignees.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <label className="flex flex-col gap-1 text-sm">
+                Start
+                <input
+                  type="date"
+                  className="input"
+                  value={form.start_date}
+                  onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-sm">
+                Due
+                <input
+                  type="date"
+                  className="input"
+                  value={form.due_date}
+                  onChange={(e) => setForm({ ...form, due_date: e.target.value })}
+                />
+              </label>
+            </div>
+            <div className="grid sm:grid-cols-3 gap-3">
+              <label className="flex flex-col gap-1 text-sm">
+                Contribution
+                <select
+                  className="input"
+                  value={form.category_code}
+                  onChange={(e) => setForm({ ...form, category_code: e.target.value })}
+                >
+                  {(categories.data ?? []).map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 text-sm">
+                Weight
+                <input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  className="input"
+                  value={form.weight}
+                  onChange={(e) => setForm({ ...form, weight: e.target.value })}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-sm">
+                Est. hours
+                <input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  className="input"
+                  value={form.est_hours}
+                  onChange={(e) => setForm({ ...form, est_hours: e.target.value })}
+                />
+              </label>
+            </div>
+            <p className="text-meta">
+
+      <Modal open={goalOpen} onClose={() => setGoalOpen(false)} title="New goal">
+        <div className="flex flex-col gap-3">
+          <label className="flex flex-col gap-1 text-sm">
+            Title
+            <input
+              className="input"
+              value={goalForm.title}
+              onChange={(e) => setGoalForm({ ...goalForm, title: e.target.value })}
+              placeholder="Submit the camera-ready version"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            Details
+            <textarea
+              className="input min-h-[4rem]"
+              value={goalForm.description}
+              onChange={(e) => setGoalForm({ ...goalForm, description: e.target.value })}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            Target date
+            <input
+              type="date"
+              className="input"
+              value={goalForm.target_date}
+              onChange={(e) => setGoalForm({ ...goalForm, target_date: e.target.value })}
+            />
+          </label>
+          <div className="flex justify-end gap-2">
+            <button className="btn-ghost" onClick={() => setGoalOpen(false)}>
+              Cancel
+            </button>
+            <button
+              className="btn-primary"
+              onClick={() => void submitGoal()}
+              disabled={createGoal.isPending}
+            >
+              Add goal
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={milestoneOpen} onClose={() => setMilestoneOpen(false)} title="New milestone">
+        <div className="flex flex-col gap-3">
+          <label className="flex flex-col gap-1 text-sm">
+            Goal
+            <select
+              className="input"
+              value={msForm.goal_id}
+              onChange={(e) => setMsForm({ ...msForm, goal_id: e.target.value })}
+            >
+              <option value="">Choose a goal…</option>
+              {(goals.data ?? []).map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            Title
+            <input
+              className="input"
+              value={msForm.title}
+              onChange={(e) => setMsForm({ ...msForm, title: e.target.value })}
+              placeholder="Experiments complete"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            Due
+            <input
+              type="date"
+              className="input"
+              value={msForm.due_date}
+              onChange={(e) => setMsForm({ ...msForm, due_date: e.target.value })}
+            />
+          </label>
+          <div className="flex justify-end gap-2">
+            <button className="btn-ghost" onClick={() => setMilestoneOpen(false)}>
+              Cancel
+            </button>
+            <button
+              className="btn-primary"
+              onClick={() => void submitMilestone()}
+              disabled={createMilestone.isPending}
+            >
+              Add milestone
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+              The assignee gets an in-app notification and an email with the deadline.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button className="btn-ghost" onClick={() => setTaskOpen(false)}>
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                onClick={() => void submitTask()}
+                disabled={createTask.isPending}
+              >
+                {createTask.isPending ? "Assigning…" : "Assign task"}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
       </section>
     </div>
   );

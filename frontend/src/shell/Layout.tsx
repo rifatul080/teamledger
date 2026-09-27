@@ -58,6 +58,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             }
             icon={<BellIcon />}
           />
+          <SideLink to="/schedule" label="My week" icon={<CalendarIcon />} />
+          <SideLink to="/notes" label="Notes" icon={<NoteIcon />} />
           <SideLink to="/me" label="Profile" icon={<UserIcon />} />
         </nav>
         <div className="px-3 py-3 border-t border-line-subtle">
@@ -225,6 +227,22 @@ function SearchIcon() {
     <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="7" cy="7" r="4.5" />
       <path d="M10.5 10.5l3 3" />
+    </svg>
+  );
+}
+function CalendarIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="3" width="12" height="11" rx="1.5" />
+      <path d="M2 6.5h12M5.5 2v2.5M10.5 2v2.5" />
+    </svg>
+  );
+}
+function NoteIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 2.5h7l3 3v8H3z" />
+      <path d="M5.5 8h5M5.5 10.5h5" />
     </svg>
   );
 }

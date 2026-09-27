@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../app/api";
 import { useSignup } from "../app/auth";
 import { useAcceptInvite } from "../app/data";
+import { SocialButtons } from "../components/auth/SocialButtons";
 import { pushToast } from "../components/ui/Toast";
 
 export default function SignupPage() {
@@ -186,6 +187,7 @@ export default function SignupPage() {
           <button type="submit" className="btn-primary" disabled={submitting}>
             {submitting ? "Creating account…" : "Create account"}
           </button>
+          <SocialButtons verb="Sign up" />
           <p className="text-faint text-center mt-1">
             By creating an account you agree to our values: invite-only team
             membership, evidence-based authorship, no surprises.

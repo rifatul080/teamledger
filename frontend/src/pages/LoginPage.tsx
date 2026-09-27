@@ -2,11 +2,18 @@ import { FormEvent, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useLogin } from "../app/auth";
 import { useAcceptInvite } from "../app/data";
+import { SocialButtons } from "../components/auth/SocialButtons";
 import { pushToast } from "../components/ui/Toast";
+
+const OAUTH_ERRORS: Record<string, string> = {
+  state: "Sign-in was interrupted. Please try again.",
+  default: "Social sign-in is unavailable right now.",
+};
 
 export default function LoginPage() {
   const [params] = useSearchParams();
   const nextPath = params.get("next") ?? "/dashboard";
+  const oauthError = params.get("error");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const login = useLogin();
@@ -57,6 +64,11 @@ export default function LoginPage() {
           <span className="text-h2">TeamLedger</span>
         </div>
         <h1 className="text-h1 mb-1">Sign in</h1>
+        {oauthError && (
+          <div className="mb-3 text-sm text-accent" role="alert">
+            {OAUTH_ERRORS[oauthError] ?? OAUTH_ERRORS.default}
+          </div>
+        )}
         <p className="text-meta mb-4">
           Don't have an account?{" "}
           <Link to="/signup" className="text-accent underline">
@@ -96,6 +108,7 @@ export default function LoginPage() {
           <button type="submit" className="btn-primary" disabled={submitting}>
             {submitting ? "Signing in…" : "Sign in"}
           </button>
+          <SocialButtons verb="Sign in" />
           <Link to="/" className="text-meta text-center mt-1 underline">
             Back to the public page
           </Link>
