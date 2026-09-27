@@ -9,6 +9,7 @@ from .invitation import Invitation  # noqa: F401
 from .membership import Membership  # noqa: F401
 from .message import ChatMessage, MessageRead  # noqa: F401
 from .milestone import Milestone  # noqa: F401
+from .note import Note  # noqa: F401
 from .notification import Notification, NotificationKey  # noqa: F401
 from .participant import ProjectParticipant  # noqa: F401
 from .password_reset import PasswordResetToken  # noqa: F401
@@ -21,3 +22,4 @@ from .task_review import TaskReview  # noqa: F401
 from .task_submission import TaskSubmission  # noqa: F401
 from .team import Team  # noqa: F401
 from .user import User  # noqa: F401
+

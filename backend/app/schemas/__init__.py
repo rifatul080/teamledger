@@ -6,6 +6,7 @@ from .files import *  # noqa: F403
 from .goals import *  # noqa: F403
 from .invitations import *  # noqa: F403
 from .milestones import *  # noqa: F403
+from .notes import *  # noqa: F403
 from .notifications import *  # noqa: F403
 from .projects import *  # noqa: F403
 from .schedules import *  # noqa: F403
@@ -17,3 +18,4 @@ from .teams import *  # noqa: F403
 # second star-import shadows the first in this namespace — direct module
 # imports (`from .auth import ...`) disambiguate, so silence the type clash.
 from .users import *  # type: ignore[assignment]  # noqa: F403
+
