@@ -1,57 +1,20 @@
-// Cloudflare Containers config for TeamLedger.
+// Cloudflare Worker config for TeamLedger — free-plan keep-alive cron ping.
 //
-// Architecture (required for wrangler v4.x with Containers):
-//   - This Worker (src/worker.ts) is the public entrypoint. Cloudflare
-//     gives it a *.workers.dev URL.
-//   - src/container.ts exports `TeamledgerContainer`, a Durable Object
-//     that owns a single long-running instance of the FastAPI container.
-//   - The container image is built from ./backend/Dockerfile; uvicorn
-//     listens on :8080 inside the container (matches Dockerfile EXPOSE
-//     and src/container.ts `defaultPort`).
+// History: this Worker previously fronted a Containers deployment (a
+// Durable Object proxying to the FastAPI container — see git history and
+// src/container.ts). Containers require the paid Workers plan, so that
+// architecture never deployed on the free plan and has been replaced:
 //
-// All request flow: workers.dev -> Worker (src/worker.ts) ->
-//   API Durable Object (env.API.idFromName("teamledger-api")) ->
-//   container port 8080 (FastAPI / static SPA).
+//   scheduled() every 5 minutes →
+//     GET https://teamledger-1.onrender.com/api/v1/health/db
 //
-// ───── Prerequisites ─────
-// Paid Workers plan ($5/mo minimum). Container instance hours are charged
-// separately. Free tier Workers can serve Workers but cannot run
-// Containers.
+// Render's Free compute plan spins down after 15 minutes without inbound
+// traffic; this ping keeps the API instance — and the Neon database, via
+// the health check's SELECT 1 — warm at zero cost. fetch() redirects the
+// workers.dev URL to the production site (Vercel).
 //
-// ───── Deploy from your local machine ─────
-//   1. npm install                            # installs wrangler + the
-//                                              # @cloudflare/containers pkg
-//                                              # used by src/container.ts
-//   2. wrangler login                         # OAuth browser flow
-//   3. wrangler secret put DATABASE_URL       # Neon Postgres URL
-//      wrangler secret put SECRET_KEY         # 32+ byte random string
-//      wrangler secret put RESEND_API_KEY     # Resend (or skip; MAIL_BACKEND=console)
-//      wrangler secret put RESEND_FROM        # e.g. "TeamLedger <noreply@teamledger.app>"
-//   4. wrangler deploy                        # builds + pushes container
-//                                              # image, then deploys Worker
-//
-// ───── Build context ─────
-// Wrangler runs `docker build` from the directory containing the
-// `wrangler.jsonc` file (the repo root), so the `image` path is
-// `./backend/Dockerfile` — relative to the repo root, not to the
-// `wrangler.jsonc`'s logical location. The Dockerfile does the SPA build
-// internally.
-//
-// ───── Free Postgres ─────
-// Pair with Neon's free tier (postgresql://...sslmode=require) by setting
-// DATABASE_URL as a secret. The app auto-detects the postgresql://
-// scheme; no other config is required.
-//
-// ───── Health probe ─────
-// Cloudflare calls /healthz on port 8080 (defined in src/container.ts:
-// `defaultPort`). A 200 marks the container healthy.
-//
-// ───── Notes ─────
-// `port`, `health`, and `env` are NOT valid `containers[]` fields in
-// wrangler v4.x — port is set via `defaultPort` in the Container class,
-// health is automatic, and env vars are set in the same class. Earlier
-// versions of this config that tried to put them here produced:
-//   "Unexpected fields found in containers field: 'port','health','env'".
+// Second (independent) keep-alive layer: .github/workflows/uptime.yml
+// pings the same endpoint every 5 minutes from GitHub Actions.
 {
   "$schema": "https://developers.cloudflare.com/workers/wrangler/config-schema.json",
   "name": "teamledger",
@@ -59,38 +22,8 @@
   "compatibility_date": "2025-09-01",
   "compatibility_flags": ["nodejs_compat"],
 
-  "containers": [
-    {
-      "name": "teamledger-api",
-      "class_name": "TeamledgerContainer",
-      "image": "./backend/Dockerfile",
-      "image_build_context": "./",
-      "max_instances": 1,
-      "instance_type": "basic"
-    }
-  ],
-
-  "durable_objects": {
-    "bindings": [
-      {
-        "name": "API",
-        "class_name": "TeamledgerContainer"
-      }
-    ]
-  },
-
-  "migrations": [
-    {
-      "tag": "v1",
-      "new_sqlite_classes": ["TeamledgerContainer"]
-    }
-  ],
-
-  "vars": {
-    "APP_ENV": "production",
-    "STORAGE_BACKEND": "local",
-    "STORAGE_LOCAL_ROOT": "/app/storage/files",
-    "AVATAR_LOCAL_ROOT": "/app/storage/avatars",
-    "MAIL_BACKEND": "resend"
+  // Cron triggers are supported on the free Workers plan.
+  "triggers": {
+    "crons": ["*/5 * * * *"]
   }
 }

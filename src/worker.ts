@@ -1,46 +1,45 @@
 /**
- * Cloudflare Worker entrypoint for TeamLedger.
+ * Cloudflare Worker entrypoint for TeamLedger — keep-alive cron ping.
  *
- * Every public request hits this Worker. The Worker delegates each request
- * to a single long-running container that runs the FastAPI app on :8080.
+ * Replaces the earlier Containers proxy (git history; src/container.ts):
+ * Containers need the paid Workers plan, so this Worker now does a single
+ * job on the free plan —
  *
- *   internet -> Workers edge -> this Worker -> Container (uvicorn) -> SPA / API
+ *   scheduled() → GET https://teamledger-1.onrender.com/api/v1/health/db
  *
- * The container is reached via the Durable Object binding named "API"
- * (`wrangler.jsonc` -> durable_objects.bindings[].name == "API"). We use
- * `getContainer` with a stable name to keep a single container instance
- * alive for the entire app rather than spinning one up per request.
+ * every 5 minutes (see `triggers.crons` in wrangler.jsonc). Render Free
+ * spins down after 15 minutes without inbound traffic, so this ping keeps
+ * the API warm; the health check's SELECT 1 also keeps Neon's compute
+ * warm. fetch() just redirects the workers.dev URL to the production site.
  */
 
-import { getContainer } from "@cloudflare/containers";
-
-export { TeamledgerContainer } from "./container";
-
-// The container instance name. Bumping this string on deploy would force
-// a fresh container (do not change casually — it loses in-memory state).
-const CONTAINER_NAME = "teamledger-api";
+const RENDER_HEALTH_URL = "https://teamledger-1.onrender.com/api/v1/health/db";
+const SITE_URL = "https://teamledger-rifat-0046.vercel.app/";
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    // Forward the request to the named container instance. The container's
-    // uvicorn server preserves the URL path so /api/v1/* and the SPA
-    // routes resolve identically on the FastAPI side.
-    return getContainer(env.API, CONTAINER_NAME).fetch(request);
+  async fetch(_request: Request): Promise<Response> {
+    return Response.redirect(SITE_URL, 302);
+  },
+
+  async scheduled(_event: ScheduledController, _env: Env): Promise<void> {
+    await ping();
   },
 };
 
-export interface Env {
-  /** Container DO binding — declared in wrangler.jsonc. */
-  API: DurableObjectNamespace;
-
-  // Secrets (set with `wrangler secret put <NAME>`):
-  DATABASE_URL?: string;
-  SECRET_KEY?: string;
-  RESEND_API_KEY?: string;
-  RESEND_FROM?: string;
-
-  // Non-secret overrides (set with `wrangler secret put` or via vars in
-  // wrangler.jsonc):
-  PUBLIC_BASE_URL?: string;
-  CORS_ALLOWED_ORIGINS?: string;
+async function ping(): Promise<void> {
+  try {
+    const res = await fetch(RENDER_HEALTH_URL, {
+      headers: { "user-agent": "teamledger-keepalive" },
+      signal: AbortSignal.timeout(30_000),
+    });
+    const body = await res.text();
+    console.log(`keep-alive -> ${res.status}: ${body.slice(0, 160)}`);
+  } catch (err) {
+    // Re-throw so the failed invocation is visible in cron logs/metrics.
+    console.error(`keep-alive failed: ${String(err)}`);
+    throw err;
+  }
 }
+
+/** No bindings — the ping target is a hardcoded public URL. */
+export interface Env {}
