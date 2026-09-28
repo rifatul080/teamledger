@@ -28,7 +28,23 @@ def tmp_storage(tmp_path: Path) -> Path:
 
 @pytest.fixture(scope="function")
 def db_engine(tmp_path: Path, tmp_storage: Path, monkeypatch):
-    """Per-test fresh SQLite database with migrations applied."""
+    """Per-test fresh SQLite database with migrations applied.
+
+    NOTE: this fixture deliberately IGNORES any DATABASE_URL coming from the
+    environment and forces SQLite, even in the CI job named
+    "backend (postgres)". Tests need a throwaway database per test, which a
+    shared server database cannot give cheaply.
+
+    So do not read a green "backend (postgres)" check as "the app was tested
+    on PostgreSQL". What that job actually proves is narrower:
+      * `alembic upgrade head` applies the whole migration chain on PG 16
+        (the "Migrate" step), and
+      * ruff / mypy / bandit pass.
+    Application-level queries have only ever run against SQLite. When you touch
+    raw SQL, remember it must stay portable, and verify real Postgres
+    behaviour by pointing a dev instance at Neon (see
+    docs/DEPLOY_SPLIT_VERCEL_RENDER.md) rather than assuming.
+    """
     db_file = tmp_path / "test.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_file}")
     monkeypatch.setenv("STORAGE_LOCAL_ROOT", str(tmp_storage))

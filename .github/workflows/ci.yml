@@ -7,6 +7,12 @@ on:
     branches: [main]
 
 jobs:
+  # Despite the name, this job does NOT run the app's queries against
+  # PostgreSQL: tests/conftest.py forces a per-test SQLite database. What this
+  # job genuinely proves is that `alembic upgrade head` applies the whole
+  # migration chain on a real PostgreSQL 16, plus lint/type/security gates.
+  # Keep raw SQL portable, and verify real Postgres behaviour against Neon
+  # (docs/DEPLOY_SPLIT_VERCEL_RENDER.md) rather than assuming.
   backend:
     name: backend (postgres)
     runs-on: ubuntu-latest
